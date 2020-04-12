@@ -1,4 +1,5 @@
 const express = require("express");
+const app = express();
 const router = express.Router();
 const db = require('../models');
 const CryptoJS = require("crypto-js");
@@ -7,17 +8,22 @@ const util = require("util");
 const multer = require("multer");
 // const mkdirSync = util.promisify(fs.mkdirSync);
 
+app.model = (model) => db[model];
+
 const storage = multer.diskStorage({
-    destination:async function(req,file,cb){
-        var directory;
+    destination: function(req,file,cb){
+        var directory;       
+        
         if(req.body.type=="user"){
-            if (fs.existsSync("./api/resource/images/users/"+req.body.idOfType)) {
-                console.log("Directory exists.");
-                directory = "./api/resource/images/users/"+req.body.idOfType;
-            } else {
-                fs.mkdirSync("./api/resource/images/users/"+req.body.idOfType,{ recursive:true });
-                directory = "./api/resource/images/users/"+req.body.idOfType;
-            }
+            directory = "./api/resource/images/users/"+req.body.idOfType;
+        }
+        if(req.body.type=="ingredient"){
+            directory = "./api/resource/images/ingredient/";
+        }
+        if (fs.existsSync(directory)) {
+            console.log("Directory exists.");
+        } else {
+            fs.mkdirSync(directory,{ recursive:true });
         }
         cb(null,directory);
     },
@@ -27,50 +33,29 @@ const storage = multer.diskStorage({
     }
 });
 
-const fileFilter = (req,file,cb) => {
-    if(file.mimetype == "image/jpeg" || file.mimetype == "image/jpg" || file.mimetype == "image/png" || file.mimetype == "image/gif"){
-        cb(null,true);
-    }else{
-        req.fileValidationError = 'Suba solo imagenes/gifs';
-        return cb('Suba solo imagenes/gifs');
+const fileFilter = async (req,file,cb) => {
+    const body = req.body;
+    typeSelct = body.type;        
+    console.log(typeSelct);
+        
+    try {
+    finder = await app.model(typeSelct).findByPk(body.idOfType);
+        if(finder){
+            if(file.mimetype == "image/jpeg" || file.mimetype == "image/jpg" || file.mimetype == "image/png" || file.mimetype == "image/gif"){
+                cb(null,true);
+            }else{
+                req.fileValidationError = 'Suba solo imagenes/gifs';
+                return cb('Suba solo imagenes/gifs');
+            }
+        }else{
+            return cb(typeSelct+' don´t exist');
+        }
+    } catch (error) {
+        return cb(error.message);
     }
 }
 
 const upload = multer({storage:storage,fileFilter:fileFilter}).single('imageSend');
-
-
-router.post('/uploadImage',(req,res) => {
-    const response = new Object(); 
-    
-    upload(req,res, async (err) =>{
-        if(err){
-            response.status = 'fail';
-            response.message = err;
-        }else{
-            try {
-                const image = await db.image.create({
-                    type:req.body.type,
-                    idOfType:req.body.idOfType,
-                    principal:req.body.principal,
-                    route:req.file.path
-                });
-
-                if(image){
-                    response.status = 'success';
-                    response.message="Image Uploaded";
-                    response.image = image;
-                }else{
-                    response.status = 'fail';
-                    response.message="Something happend";
-                }
-            } catch (error) {
-                response.status = 'fail';
-                response.message=error.message;
-            }      
-        }
-        res.send(response);
-    });
-});
 
 router.post("/login", (req, res) => {
     const response = new Object();
@@ -263,9 +248,95 @@ router.post("/signup", async (req, res) => {
         response.status="fail";
         response.message="existing user";
     }
-    res.send(response)
+    res.send(response);
 });
 
+router.post('/uploadImage',async(req,res) => {
+    const response = new Object();
+    await upload(req,res,async(err)=>{        
+        if(err){
+            response.status = 'fail';
+            response.message = err;
+        }else{
+            try {
+                const image = await db.image.create({
+                    type:req.body.type,
+                    idOfType:req.body.idOfType,
+                    principal:req.body.principal,
+                    route:req.file.path
+                });
+                if(image){
+                    response.status = 'success';
+                    response.message="Image Uploaded";
+                    response.image = image;
+                }else{
+                    response.status = 'fail';
+                    response.message="Something happend";
+                }
+            } catch (error) {
+                response.status = 'fail';
+                response.message=error.message;
+            }      
+        }
+        res.send(response);
+    });
+});
+
+const ingredientFilter = async (req,file,cb)=>{
+    // console.log(file);
+    if(file.mimetype == "image/jpeg" || file.mimetype == "image/jpg" || file.mimetype == "image/png"){
+        cb(null,true);
+    }else{
+        req.fileValidationError = 'Suba solo imagenes/gifs';
+        return cb('Suba solo imagenes/gifs');
+    }
+}
+
+const uploadIngredient = multer({storage:storage,fileFilter:ingredientFilter}).single('imageSend');
+
+router.post('/saveIngredient',async(req,res)=>{
+    const response = new Object();
+    var dirImg;
+        await uploadIngredient(req,res,async(err)=>{
+            if(typeof req.file !== "undefined"){
+                response.message="immage send";
+                dirImg = "./api/resource/images/ingredient/"+req.file.path;
+            }else{
+                response.status = 'fail';
+                response.message=err;
+                dirImg = "./api/resource/images/ingredient/default.jpg";
+            }            
+            const [ingredient,created] = await db.ingredient.findOrCreate({
+                where:{name:req.body.name},
+                defaults:{
+                    name:req.body.name
+                }
+            });
+
+            if(created){
+                response.status = 'success';
+                response.message="ingredient created";
+                response.ingredient = ingredient;
+                const image = await db.image.create({
+                    type:req.body.type,
+                    idOfType:ingredient.idIngredient,
+                    principal:1,
+                    route:dirImg
+                });
+                if(image){
+                    response.messageImage="Image Uploaded";
+                    response.image = image;
+                }else{
+                    response.status = 'fail';
+                    response.message="Something happend";
+                }
+            }else{
+                response.status="fail";
+                response.message="existing ingredient";
+            }
+            res.send(response);
+        });
+});
 
 module.exports = router;
 // var dirImage;

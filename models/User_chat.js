@@ -9,14 +9,14 @@ module.exports = (db, DataTypes) => {
             references:{
                 model:'users',
                 key:'idUser'
-            }
+            },
         },
         idChat:{
             type:DataTypes.INTEGER,
             references:{
                 model:'chats',
                 key:'idChat'
-            }
+            },
         }
     });
     return user_chat;

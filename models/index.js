@@ -46,7 +46,25 @@ db.user_chat.hasOne(db.user, {
   sourceKey: 'idUser',
   constraints:false
 });
-// sequelize.sync({ force: true });
+
+
+db.recipe.hasMany(db.step_recipe,{
+  foreignKey:'idRecipe'
+});
+
+db.recipe.hasMany(db.recipe_ingredient,{
+  foreignKey:'idRecipe'
+})
+
+db.recipe_ingredient.hasOne(db.ingredient,{
+  foreignKey:'idIngredient',
+  sourceKey:'idIngredient',
+  constraints:false
+});
+
+// db.ingredient.hasOne(db.recipe_ingredient,{
+//   foreignKey:"idIngredient"
+// });
 
 
 db.sequelize = sequelize;
