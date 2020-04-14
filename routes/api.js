@@ -6,19 +6,25 @@ const CryptoJS = require("crypto-js");
 const fs = require('fs');
 const util = require("util");
 const multer = require("multer");
+const {Sequelize,Op} = require('sequelize');
+
 // const mkdirSync = util.promisify(fs.mkdirSync);
 
 app.model = (model) => db[model];
 
 const storage = multer.diskStorage({
     destination: function(req,file,cb){
-        var directory;       
+        var directory;
+        // console.log(req.body);
         
         if(req.body.type=="user"){
             directory = "./api/resource/images/users/"+req.body.idOfType;
         }
         if(req.body.type=="ingredient"){
             directory = "./api/resource/images/ingredient/";
+        }
+        if(req.body.type=="recipe"){
+            directory = "./api/resource/images/recipe/"+req.body.title.replace(/\s/g, '');
         }
         if (fs.existsSync(directory)) {
             console.log("Directory exists.");
@@ -36,7 +42,7 @@ const storage = multer.diskStorage({
 const fileFilter = async (req,file,cb) => {
     const body = req.body;
     typeSelct = body.type;        
-    console.log(typeSelct);
+    console.log("typeSelct");
         
     try {
     finder = await app.model(typeSelct).findByPk(body.idOfType);
@@ -130,14 +136,14 @@ router.get('/getChats', async (req, res) => {
         for (const chat of base_chats) {
             var new_chat = Object();
             new_chat.id = chat.idChat;
-            new_chat.name = chat.chat.nombreChat;
+            new_chat.name = chat.chat.nameChat;
             new_chat.users = [];
             var usersByChat = await db.user_chat.findAll({ include: [db.user], attributes: ['idUser'], where: { idChat: chat.idChat } });
             for (const user of usersByChat) {
                 var user_in_chat = Object();
                 user_in_chat.idUser = user.idUser;
                 user_in_chat.names = user.user.names;
-                user_in_chat.lasts_names = user.user.lasts_names;
+                user_in_chat.surnames = user.user.surnames;
                 user_in_chat.email = user.user.email;
                 new_chat.users.push(user_in_chat);
             }
@@ -158,43 +164,70 @@ router.get('/getChats', async (req, res) => {
 
 router.get('/getMessages', async (req, res) => {
     const response = new Object();
-    response.status = "fail";
     // Se obtienen los user_chat donde se encuentra el usuario
-    var user_chat = await db.user_chat.findAll({ where: { idChat: req.query.idChat, idUser: req.query.idUser } });
-    if (user_chat != null) {
-        var last10Messages = await db.message.findAll({
-            where: {
-                idChat: req.query.idChat,
-                createdAt: {
-                    [db.op.lt]: new Date(req.query.sinceDate)
-                },
-            },
-            order: [['createdAt', 'ASC']],
-            limit: req.query.limit!=undefined?parseInt(req.query.limit):10
-        });
-        if (last10Messages != null) {
-            var messages = [];
-            // // Se recorren todos los idChat a los que pertenece y se buscan y listan los usuarios de cada uno
-            // // Se guarda en un array la informacion del chat y los usuarios que pertenecen a cada uno
-            for (const message of last10Messages) {
-                var new_message = Object();
-                new_message.idMessage = message.idMessage;
-                new_message.idChat = message.idChat;
-                new_message.idSender = message.idSender;
-                new_message.message = message.message;
-                new_message.createdAt = message.createdAt;
-                messages.push(new_message);
-            }
 
-            // // console.log(chats);
-            response.status = "success";
-            // response.chats = chats;
-            response.messages = messages;
+    var whereCondition = {}
+
+    // Si el idChat recibido por el request no es nulo ni vacio se agrega condicion
+    if (req.query.idChat != undefined && req.query.idChat != '' && req.query.idChat > 0) {
+        whereCondition.idChat = req.query.idChat;
+    }
+    else {
+        response.status = "fail";
+        errors = response.errors != undefined ? response.errors : [];
+        errors.push("Incorrect idChat");
+        response.errors = errors;
+    }
+
+    // Si el idChat recibido por el request no es nulo ni vacio se agrega condicion
+    if (req.query.idMessage != undefined && req.query.idMessage != '') {
+        if (req.query.idMessage > 0) {
+            try {
+                whereCondition.idMessage = {
+                    [db.op.lt]: parseInt(req.query.idMessage)
+                };
+            } catch (error) {
+                console.log(error);
+
+            }
+        } else {
+            response.status = "fail";
+            errors = response.errors != undefined ? response.errors : [];
+            errors.push("Incorrect idMessage");
+            response.errors = errors;
+        }
+    }
+
+    if (response.errors == undefined) {
+
+        var user_chat = await db.user_chat.findAll({ where: { idChat: req.query.idChat, idUser: req.query.idUser } });
+        if (user_chat != null) {
+            var last10Messages = await db.message.findAll({
+                where: whereCondition,
+                order: [['idMessage', 'DESC']],
+                limit: req.query.limit != undefined ? parseInt(req.query.limit) : 10
+            });
+            if (last10Messages != null) {
+                var messages = [];
+                // // Se recorren todos los idChat a los que pertenece y se buscan y listan los usuarios de cada uno
+                // // Se guarda en un array la informacion del chat y los usuarios que pertenecen a cada uno
+                for (const message of last10Messages) {
+                    var new_message = Object();
+                    new_message.idMessage = message.idMessage;
+                    new_message.idChat = message.idChat;
+                    new_message.idSender = message.idSender;
+                    new_message.message = message.message;
+                    new_message.createdAt = message.createdAt;
+                    messages.push(new_message);
+                }
+
+                response.status = "success";
+                response.messages = messages;
+            }
         }
     }
 
     res.send(response);
-    // res.send(base_chats);
 });
 
 router.post("/checkMail",(req,res) => {
@@ -226,12 +259,12 @@ router.post("/signup", async (req, res) => {
         where:{email:body.email},
         defaults:{
             names:body.names,
-            lasts_names:body.lasts_names,
+            surnames:body.surnames,
             bornDate:body.bornDate,
             gender:body.gender,
-            interested_in:body.interested_in,
+            interestedIn:body.interestedIn,
             email:body.email,
-            looking_for:body.looking_for,
+            lookingFor:body.lookingFor,
             lifeStyle:body.lifeStyle,
             password:CryptoJS.SHA1(body.password).toString(),
             f_active:1,
@@ -338,41 +371,149 @@ router.post('/saveIngredient',async(req,res)=>{
         });
 });
 
-module.exports = router;
-// var dirImage;
-        // if (fs.existsSync("./api/resource/images/users/"+user.nickName)) {
-        //     console.log("Directory exists.")
-        // } else {
-        //     fs.mkdirSync("./api/resource/images/users/"+user.nickName,{ recursive:true },(error)=>{
-        //         if(error){
-        //             console.log(error);
-        //         }else{
-        //             console.log("Dir creado");
-        //         }              
-        //     });
-        // }
-        
-        // if(user.profile_picture.length>0){
-        //     try {
-        //         await writeFile("./api/resource/images/users/" + user.nickName + "/perfilImage.jpg", body.profile_picture, 'base64');
-        //         dirImage = "./api/resource/images/users/" + user.nickName + "/perfilImage.jpg";
-        //     } catch (error) {
-        //         console.error(error);
-        //     }
-        // }else{
-        //     dirImage = "./api/resource/images/users/default/profile.jpg";
-        // }
 
-        // const [images,created] = await db.image.findOrCreate({
-        //     where:{
-        //         kind:"user",
-        //         idOfKind:user.idUser,
-        //         important:1
-        //     },
-        //     defaults:{
-        //         kind:"user",
-        //         idOfKind:user.idUser,
-        //         important:1,
-        //         route:dirImage
-        //     }
-        // });
+const recipeFilter = async (req,file,cb) => {
+    if(file.mimetype == "image/jpeg" || file.mimetype == "image/jpg" || file.mimetype == "image/png" || file.mimetype == "image/gif"){
+        cb(null,true);
+    }else{
+        req.fileValidationError = 'Suba solo imagenes/gifs';
+        return cb('Suba solo imagenes/gifs');
+    }
+}
+
+const uploadRecipie = multer({storage:storage,fileFilter:recipeFilter}).array('images',6);
+
+router.post("/generateRecipe", async (req, res) => {
+    const response = new Object();
+    var dirImg;
+    await uploadRecipie(req,res,async(err)=>{
+        console.log(req.files);
+        
+        if (err) {
+            response.status="fail";
+            response.message=err;
+        } else {
+            if(req.files.length!=0){
+                dirImg = true;
+            }else{
+                dirImg = false;
+            }
+            try {
+                var existRecipe = await db.recipe.findOne({where:{title:req.body.title}});
+                if (existRecipe) {
+                    response.status="fail";
+                    response.message="existing recipe";
+                } else {
+                    const dataStep = JSON.parse(req.body.stepRecipe);
+                    const dataIngredients = JSON.parse(req.body.recipeIngredient);
+                    const recipe = await db.recipe.create({
+                        title : req.body.title,
+                        description:req.body.description,
+                        step_recipes:dataStep,
+                        recipe_ingredients:dataIngredients
+                    },{
+                        include:[db.step_recipe,db.recipe_ingredient]
+                    });
+                    if (recipe) {
+                        response.status="success";
+                        response.message=recipe;
+                        if(dirImg){
+                            var paths = req.files.map(file => {
+                                var obj={};
+                                obj["type"] = req.body.type;
+                                obj["idOfType"] = recipe.idRecipe;
+                                obj["principal"] = 1;
+                                obj["route"] = file.path;
+                                return obj
+                            });
+                            const imageRecipe = db.image.bulkCreate(paths);
+                            if (imageRecipe) {response.image="inseted all the images"} else {response.image="fail inserting images";}
+                        }else{
+                            const [image,created] = await db.image.findOrCreate({
+                                where:{
+                                    type:req.body.type,
+                                    idOfType:recipe.idRecipe
+                                },
+                                defaults:{
+                                    type:req.body.type,
+                                    idOfType:recipe.idRecipe,
+                                    principal:1,
+                                    route:".api/resource/images/recipe/default.jpg"
+                                }
+                            });
+                            if (created) {response.image="inserted default image"} else {response.image="fail insert default image";}
+                        }
+                    } else {
+                        response.status="fail";
+                        response.message="faild doing insert"
+                    }
+                }
+            } catch (error) {
+                response.status=error.message;
+            }
+        }
+        res.send(response);
+    });
+});
+
+router.get("/getLastsRecipe",async(req,res)=>{
+    var recipes = await db.recipe.findAll({
+        limit:10,
+        order:[['idRecipe', 'DESC']]
+    });
+    res.send(recipes);
+});
+
+router.get("/getRandomRecipe",async(req,res)=>{
+    const response = new Object();
+    var randomRecipes = await db.recipe.findAll({
+        order:Sequelize.literal('rand()'),
+        limit:10
+    });
+    res.send(randomRecipes);
+});
+
+router.get("/getRestRandomRecipe",async(req,res)=>{
+    var idExisting = JSON.parse(req.body.idExisting);
+    
+    var moreRandom = await db.recipe.findAll({
+        limit:10,
+        order:Sequelize.literal('rand()'),
+        where:{
+            idRecipe:{
+                [Op.notIn]: idExisting,
+            }
+        },
+        include:[{
+            model:db.image
+        }]
+    });
+    res.send(moreRandom);
+    
+});
+
+router.get("/getRecipe",async(req,res)=>{
+    const response = new Object();
+    var recipe = await db.recipe.findByPk(
+        req.body.idRecipe,
+        {
+            include:[
+                {model:db.step_recipe},
+                {model:db.recipe_ingredient}
+            ]
+        }
+    );
+    if(recipe){
+        response.status="success";
+        response.message=recipe;
+    }else{
+        response.status="fail";
+        response.message="404 recipe not found";
+    }
+    res.send(response);
+});
+
+module.exports = router;
+//////new recipes
+////most voted
+/////random

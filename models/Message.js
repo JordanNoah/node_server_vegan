@@ -4,7 +4,7 @@ module.exports = (db, DataTypes) => {
         idChat: { type: DataTypes.BIGINT(20), allowNull: false },
         idSender: { type: DataTypes.BIGINT(20), allowNull: false },
         message: { type: DataTypes.TEXT },
-        fActive: { type: DataTypes.BOOLEAN, allowNull: false }
+        f_active: { type: DataTypes.BOOLEAN, allowNull: false }
     })
     return message;
 };

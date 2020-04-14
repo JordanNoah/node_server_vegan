@@ -1,0 +1,27 @@
+{
+    "development": {
+        "username": "root",
+        "password": "",
+        "database": "letsvegan",
+        "host": "localhost",
+        "dialect": "mysql",
+        "operatorsAliases": 0,
+        "logging": false
+    },
+    "test": {
+        "username": "root",
+        "password": "",
+        "database": "letsvegan",
+        "host": "localhost",
+        "dialect": "mysql",
+        "operatorsAliases": false
+    },
+    "production": {
+        "username": "root",
+        "password": "",
+        "database": "letsvegan",
+        "host": "localhost",
+        "dialect": "mysql",
+        "operatorsAliases": false
+    }
+}
