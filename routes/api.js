@@ -6,19 +6,25 @@ const CryptoJS = require("crypto-js");
 const fs = require('fs');
 const util = require("util");
 const multer = require("multer");
+const {Sequelize,Op} = require('sequelize');
+
 // const mkdirSync = util.promisify(fs.mkdirSync);
 
 app.model = (model) => db[model];
 
 const storage = multer.diskStorage({
     destination: function(req,file,cb){
-        var directory;       
+        var directory;
+        // console.log(req.body);
         
         if(req.body.type=="user"){
             directory = "./api/resource/images/users/"+req.body.idOfType;
         }
         if(req.body.type=="ingredient"){
             directory = "./api/resource/images/ingredient/";
+        }
+        if(req.body.type=="recipe"){
+            directory = "./api/resource/images/recipe/"+req.body.title.replace(/\s/g, '');
         }
         if (fs.existsSync(directory)) {
             console.log("Directory exists.");
@@ -36,7 +42,7 @@ const storage = multer.diskStorage({
 const fileFilter = async (req,file,cb) => {
     const body = req.body;
     typeSelct = body.type;        
-    console.log(typeSelct);
+    console.log("typeSelct");
         
     try {
     finder = await app.model(typeSelct).findByPk(body.idOfType);
@@ -338,41 +344,149 @@ router.post('/saveIngredient',async(req,res)=>{
         });
 });
 
-module.exports = router;
-// var dirImage;
-        // if (fs.existsSync("./api/resource/images/users/"+user.nickName)) {
-        //     console.log("Directory exists.")
-        // } else {
-        //     fs.mkdirSync("./api/resource/images/users/"+user.nickName,{ recursive:true },(error)=>{
-        //         if(error){
-        //             console.log(error);
-        //         }else{
-        //             console.log("Dir creado");
-        //         }              
-        //     });
-        // }
-        
-        // if(user.profile_picture.length>0){
-        //     try {
-        //         await writeFile("./api/resource/images/users/" + user.nickName + "/perfilImage.jpg", body.profile_picture, 'base64');
-        //         dirImage = "./api/resource/images/users/" + user.nickName + "/perfilImage.jpg";
-        //     } catch (error) {
-        //         console.error(error);
-        //     }
-        // }else{
-        //     dirImage = "./api/resource/images/users/default/profile.jpg";
-        // }
 
-        // const [images,created] = await db.image.findOrCreate({
-        //     where:{
-        //         kind:"user",
-        //         idOfKind:user.idUser,
-        //         important:1
-        //     },
-        //     defaults:{
-        //         kind:"user",
-        //         idOfKind:user.idUser,
-        //         important:1,
-        //         route:dirImage
-        //     }
-        // });
+const recipeFilter = async (req,file,cb) => {
+    if(file.mimetype == "image/jpeg" || file.mimetype == "image/jpg" || file.mimetype == "image/png" || file.mimetype == "image/gif"){
+        cb(null,true);
+    }else{
+        req.fileValidationError = 'Suba solo imagenes/gifs';
+        return cb('Suba solo imagenes/gifs');
+    }
+}
+
+const uploadRecipie = multer({storage:storage,fileFilter:recipeFilter}).array('images',6);
+
+router.post("/generateRecipe", async (req, res) => {
+    const response = new Object();
+    var dirImg;
+    await uploadRecipie(req,res,async(err)=>{
+        console.log(req.files);
+        
+        if (err) {
+            response.status="fail";
+            response.message=err;
+        } else {
+            if(req.files.length!=0){
+                dirImg = true;
+            }else{
+                dirImg = false;
+            }
+            try {
+                var existRecipe = await db.recipe.findOne({where:{title:req.body.title}});
+                if (existRecipe) {
+                    response.status="fail";
+                    response.message="existing recipe";
+                } else {
+                    const dataStep = JSON.parse(req.body.stepRecipe);
+                    const dataIngredients = JSON.parse(req.body.recipeIngredient);
+                    const recipe = await db.recipe.create({
+                        title : req.body.title,
+                        description:req.body.description,
+                        step_recipes:dataStep,
+                        recipe_ingredients:dataIngredients
+                    },{
+                        include:[db.step_recipe,db.recipe_ingredient]
+                    });
+                    if (recipe) {
+                        response.status="success";
+                        response.message=recipe;
+                        if(dirImg){
+                            var paths = req.files.map(file => {
+                                var obj={};
+                                obj["type"] = req.body.type;
+                                obj["idOfType"] = recipe.idRecipe;
+                                obj["principal"] = 1;
+                                obj["route"] = file.path;
+                                return obj
+                            });
+                            const imageRecipe = db.image.bulkCreate(paths);
+                            if (imageRecipe) {response.image="inseted all the images"} else {response.image="fail inserting images";}
+                        }else{
+                            const [image,created] = await db.image.findOrCreate({
+                                where:{
+                                    type:req.body.type,
+                                    idOfType:recipe.idRecipe
+                                },
+                                defaults:{
+                                    type:req.body.type,
+                                    idOfType:recipe.idRecipe,
+                                    principal:1,
+                                    route:".api/resource/images/recipe/default.jpg"
+                                }
+                            });
+                            if (created) {response.image="inserted default image"} else {response.image="fail insert default image";}
+                        }
+                    } else {
+                        response.status="fail";
+                        response.message="faild doing insert"
+                    }
+                }
+            } catch (error) {
+                response.status=error.message;
+            }
+        }
+        res.send(response);
+    });
+});
+
+router.get("/getLastsRecipe",async(req,res)=>{
+    var recipes = await db.recipe.findAll({
+        limit:10,
+        order:[['idRecipe', 'DESC']]
+    });
+    res.send(recipes);
+});
+
+router.get("/getRandomRecipe",async(req,res)=>{
+    const response = new Object();
+    var randomRecipes = await db.recipe.findAll({
+        order:Sequelize.literal('rand()'),
+        limit:10
+    });
+    res.send(randomRecipes);
+});
+
+router.get("/getRestRandomRecipe",async(req,res)=>{
+    var idExisting = JSON.parse(req.body.idExisting);
+    
+    var moreRandom = await db.recipe.findAll({
+        limit:10,
+        order:Sequelize.literal('rand()'),
+        where:{
+            idRecipe:{
+                [Op.notIn]: idExisting,
+            }
+        },
+        include:[{
+            model:db.image
+        }]
+    });
+    res.send(moreRandom);
+    
+});
+
+router.get("/getRecipe",async(req,res)=>{
+    const response = new Object();
+    var recipe = await db.recipe.findByPk(
+        req.body.idRecipe,
+        {
+            include:[
+                {model:db.step_recipe},
+                {model:db.recipe_ingredient}
+            ]
+        }
+    );
+    if(recipe){
+        response.status="success";
+        response.message=recipe;
+    }else{
+        response.status="fail";
+        response.message="404 recipe not found";
+    }
+    res.send(response);
+});
+
+module.exports = router;
+//////new recipes
+////most voted
+/////random
