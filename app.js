@@ -54,7 +54,7 @@ nsp.on('connection', (socket) => {
         idChat: message.idChat,
         idSender: idUser,
         message: message.message,
-        fActive: 1
+        f_active: 1
       });
     } catch (error) {
       console.log("Error al guardar el mensaje en bd" + error);

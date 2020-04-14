@@ -130,14 +130,14 @@ router.get('/getChats', async (req, res) => {
         for (const chat of base_chats) {
             var new_chat = Object();
             new_chat.id = chat.idChat;
-            new_chat.name = chat.chat.nombreChat;
+            new_chat.name = chat.chat.nameChat;
             new_chat.users = [];
             var usersByChat = await db.user_chat.findAll({ include: [db.user], attributes: ['idUser'], where: { idChat: chat.idChat } });
             for (const user of usersByChat) {
                 var user_in_chat = Object();
                 user_in_chat.idUser = user.idUser;
                 user_in_chat.names = user.user.names;
-                user_in_chat.lasts_names = user.user.lasts_names;
+                user_in_chat.surnames = user.user.surnames;
                 user_in_chat.email = user.user.email;
                 new_chat.users.push(user_in_chat);
             }
@@ -158,43 +158,70 @@ router.get('/getChats', async (req, res) => {
 
 router.get('/getMessages', async (req, res) => {
     const response = new Object();
-    response.status = "fail";
     // Se obtienen los user_chat donde se encuentra el usuario
-    var user_chat = await db.user_chat.findAll({ where: { idChat: req.query.idChat, idUser: req.query.idUser } });
-    if (user_chat != null) {
-        var last10Messages = await db.message.findAll({
-            where: {
-                idChat: req.query.idChat,
-                createdAt: {
-                    [db.op.lt]: new Date(req.query.sinceDate)
-                },
-            },
-            order: [['createdAt', 'ASC']],
-            limit: req.query.limit!=undefined?parseInt(req.query.limit):10
-        });
-        if (last10Messages != null) {
-            var messages = [];
-            // // Se recorren todos los idChat a los que pertenece y se buscan y listan los usuarios de cada uno
-            // // Se guarda en un array la informacion del chat y los usuarios que pertenecen a cada uno
-            for (const message of last10Messages) {
-                var new_message = Object();
-                new_message.idMessage = message.idMessage;
-                new_message.idChat = message.idChat;
-                new_message.idSender = message.idSender;
-                new_message.message = message.message;
-                new_message.createdAt = message.createdAt;
-                messages.push(new_message);
-            }
 
-            // // console.log(chats);
-            response.status = "success";
-            // response.chats = chats;
-            response.messages = messages;
+    var whereCondition = {}
+
+    // Si el idChat recibido por el request no es nulo ni vacio se agrega condicion
+    if (req.query.idChat != undefined && req.query.idChat != '' && req.query.idChat > 0) {
+        whereCondition.idChat = req.query.idChat;
+    }
+    else {
+        response.status = "fail";
+        errors = response.errors != undefined ? response.errors : [];
+        errors.push("Incorrect idChat");
+        response.errors = errors;
+    }
+
+    // Si el idChat recibido por el request no es nulo ni vacio se agrega condicion
+    if (req.query.idMessage != undefined && req.query.idMessage != '') {
+        if (req.query.idMessage > 0) {
+            try {
+                whereCondition.idMessage = {
+                    [db.op.lt]: parseInt(req.query.idMessage)
+                };
+            } catch (error) {
+                console.log(error);
+
+            }
+        } else {
+            response.status = "fail";
+            errors = response.errors != undefined ? response.errors : [];
+            errors.push("Incorrect idMessage");
+            response.errors = errors;
+        }
+    }
+
+    if (response.errors == undefined) {
+
+        var user_chat = await db.user_chat.findAll({ where: { idChat: req.query.idChat, idUser: req.query.idUser } });
+        if (user_chat != null) {
+            var last10Messages = await db.message.findAll({
+                where: whereCondition,
+                order: [['idMessage', 'DESC']],
+                limit: req.query.limit != undefined ? parseInt(req.query.limit) : 10
+            });
+            if (last10Messages != null) {
+                var messages = [];
+                // // Se recorren todos los idChat a los que pertenece y se buscan y listan los usuarios de cada uno
+                // // Se guarda en un array la informacion del chat y los usuarios que pertenecen a cada uno
+                for (const message of last10Messages) {
+                    var new_message = Object();
+                    new_message.idMessage = message.idMessage;
+                    new_message.idChat = message.idChat;
+                    new_message.idSender = message.idSender;
+                    new_message.message = message.message;
+                    new_message.createdAt = message.createdAt;
+                    messages.push(new_message);
+                }
+
+                response.status = "success";
+                response.messages = messages;
+            }
         }
     }
 
     res.send(response);
-    // res.send(base_chats);
 });
 
 router.post("/checkMail",(req,res) => {
@@ -226,12 +253,12 @@ router.post("/signup", async (req, res) => {
         where:{email:body.email},
         defaults:{
             names:body.names,
-            lasts_names:body.lasts_names,
+            surnames:body.surnames,
             bornDate:body.bornDate,
             gender:body.gender,
-            interested_in:body.interested_in,
+            interestedIn:body.interestedIn,
             email:body.email,
-            looking_for:body.looking_for,
+            lookingFor:body.lookingFor,
             lifeStyle:body.lifeStyle,
             password:CryptoJS.SHA1(body.password).toString(),
             f_active:1,

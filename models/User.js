@@ -2,7 +2,7 @@ module.exports = (db, DataTypes) => {
     const user = db.define('user', {
         idUser: { type: DataTypes.INTEGER, primaryKey: true, allowNull: false, autoIncrement: true },
         names: { type: DataTypes.STRING(1000), allowNull: false },
-        lasts_names: { type: DataTypes.STRING(1000), allowNull: true },
+        surnames: { type: DataTypes.STRING(1000), allowNull: true },
         bornDate: { type: DataTypes.STRING(50), allowNull: false },
         email: { type: DataTypes.STRING(200), allowNull: false },
         nickName: { type: DataTypes.STRING(200), allowNull: false },
@@ -14,8 +14,8 @@ module.exports = (db, DataTypes) => {
         description: { type: DataTypes.STRING(1000), allowNull: true },
         interests: { type: DataTypes.STRING(500), allowNull: true },
         lifeStyle:{type:DataTypes.STRING(100),allowNull:false},
-        looking_for:{type:DataTypes.STRING(100),allowNull:false},
-        interested_in:{type:DataTypes.STRING(100),allowNull:false},
+        lookingFor:{type:DataTypes.STRING(100),allowNull:false},
+        interestedIn:{type:DataTypes.STRING(100),allowNull:false},
         gender:{type:DataTypes.STRING(100),allowNull:false},
         job:{type:DataTypes.STRING(100),allowNull:true}
     });
