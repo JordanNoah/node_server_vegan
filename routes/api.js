@@ -292,7 +292,7 @@ router.post('/uploadImage',async(req,res) => {
             response.message = err;
         }else{
             try {
-                const image = await db.image.create({
+                const image = await app.model("image_"+req.body.type).create({
                     type:req.body.type,
                     idOfType:req.body.idOfType,
                     principal:req.body.principal,
@@ -342,7 +342,8 @@ router.post('/saveIngredient',async(req,res)=>{
             const [ingredient,created] = await db.ingredient.findOrCreate({
                 where:{name:req.body.name},
                 defaults:{
-                    name:req.body.name
+                    name:req.body.name,
+                    routeImage:dirImg
                 }
             });
 
@@ -350,19 +351,6 @@ router.post('/saveIngredient',async(req,res)=>{
                 response.status = 'success';
                 response.message="ingredient created";
                 response.ingredient = ingredient;
-                const image = await db.image.create({
-                    type:req.body.type,
-                    idOfType:ingredient.idIngredient,
-                    principal:1,
-                    route:dirImg
-                });
-                if(image){
-                    response.messageImage="Image Uploaded";
-                    response.image = image;
-                }else{
-                    response.status = 'fail';
-                    response.message="Something happend";
-                }
             }else{
                 response.status="fail";
                 response.message="existing ingredient";
@@ -387,16 +375,19 @@ router.post("/generateRecipe", async (req, res) => {
     const response = new Object();
     var dirImg;
     await uploadRecipie(req,res,async(err)=>{
-        console.log(req.files);
-        
         if (err) {
             response.status="fail";
             response.message=err;
         } else {
             if(req.files.length!=0){
-                dirImg = true;
+                dirImg = req.files.map(file => {
+                    var obj={};
+                    obj["principal"] = 1;
+                    obj["route"] = file.path;
+                    return obj
+                });               
             }else{
-                dirImg = false;
+                dirImg = [{"principal":1,"route":"api/resource/image/recipe/default.jpg"}];
             }
             try {
                 var existRecipe = await db.recipe.findOne({where:{title:req.body.title}});
@@ -410,45 +401,21 @@ router.post("/generateRecipe", async (req, res) => {
                         title : req.body.title,
                         description:req.body.description,
                         step_recipes:dataStep,
-                        recipe_ingredients:dataIngredients
+                        recipe_ingredients:dataIngredients,
+                        image_recipes:dirImg
                     },{
-                        include:[db.step_recipe,db.recipe_ingredient]
+                        include:[db.step_recipe,db.recipe_ingredient,db.image_recipe]
                     });
-                    if (recipe) {
+                    if(recipe){
                         response.status="success";
                         response.message=recipe;
-                        if(dirImg){
-                            var paths = req.files.map(file => {
-                                var obj={};
-                                obj["type"] = req.body.type;
-                                obj["idOfType"] = recipe.idRecipe;
-                                obj["principal"] = 1;
-                                obj["route"] = file.path;
-                                return obj
-                            });
-                            const imageRecipe = db.image.bulkCreate(paths);
-                            if (imageRecipe) {response.image="inseted all the images"} else {response.image="fail inserting images";}
-                        }else{
-                            const [image,created] = await db.image.findOrCreate({
-                                where:{
-                                    type:req.body.type,
-                                    idOfType:recipe.idRecipe
-                                },
-                                defaults:{
-                                    type:req.body.type,
-                                    idOfType:recipe.idRecipe,
-                                    principal:1,
-                                    route:".api/resource/images/recipe/default.jpg"
-                                }
-                            });
-                            if (created) {response.image="inserted default image"} else {response.image="fail insert default image";}
-                        }
-                    } else {
+                    }else{
                         response.status="fail";
-                        response.message="faild doing insert"
+                        response.message="error insertando";
                     }
                 }
             } catch (error) {
+                response.status="fail";
                 response.status=error.message;
             }
         }
@@ -457,24 +424,37 @@ router.post("/generateRecipe", async (req, res) => {
 });
 
 router.get("/getLastsRecipe",async(req,res)=>{
-    var recipes = await db.recipe.findAll({
-        limit:10,
-        order:[['idRecipe', 'DESC']]
-    });
-    res.send(recipes);
+    const response = new Object();
+    try {
+        var recipes = await db.recipe.findAll({
+            limit:5,
+            order:[['idRecipe', 'DESC']],
+            include:[{
+                model:db.image_recipe,
+                where: { principal : 1}
+            }]
+        });
+        if(recipes){
+            response.status = "success";
+            response.message = recipes;
+        }else{
+            response.status = "fail";
+            response.message = "not recipes";
+        }
+    } catch (error) {
+        response.status = "fail";
+        response.message = error.message;
+    }
+    res.send(response);
 });
 
 router.get("/getRandomRecipe",async(req,res)=>{
-    const response = new Object();
-    var randomRecipes = await db.recipe.findAll({
-        order:Sequelize.literal('rand()'),
-        limit:10
-    });
-    res.send(randomRecipes);
-});
-
-router.get("/getRestRandomRecipe",async(req,res)=>{
-    var idExisting = JSON.parse(req.body.idExisting);
+    var idExisting;
+    if (req.body.idExisting) {
+        idExisting = JSON.parse(req.body.idExisting);
+    } else {
+        idExisting = []
+    }
     
     var moreRandom = await db.recipe.findAll({
         limit:10,
@@ -485,11 +465,11 @@ router.get("/getRestRandomRecipe",async(req,res)=>{
             }
         },
         include:[{
-            model:db.image
+            model:db.image_recipe,
+            where: { principal : 1}
         }]
     });
     res.send(moreRandom);
-    
 });
 
 router.get("/getRecipe",async(req,res)=>{
@@ -499,7 +479,8 @@ router.get("/getRecipe",async(req,res)=>{
         {
             include:[
                 {model:db.step_recipe},
-                {model:db.recipe_ingredient}
+                {model:db.recipe_ingredient},
+                {model:db.image_recipe}
             ]
         }
     );
