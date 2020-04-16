@@ -13,6 +13,7 @@ app.use(bodyParser.json());
 const apiRoutes = require('./routes/api');
 
 app.use('/api', apiRoutes);
+app.use('/api', express.static(__dirname + '/api'));
 
 db.sequelize.sync().then(() => {
   app.listen(PORT, () => {

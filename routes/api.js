@@ -12,6 +12,7 @@ const {Sequelize,Op} = require('sequelize');
 
 app.model = (model) => db[model];
 
+
 const storage = multer.diskStorage({
     destination: function(req,file,cb){
         var directory;
@@ -387,7 +388,7 @@ router.post("/generateRecipe", async (req, res) => {
                     return obj
                 });               
             }else{
-                dirImg = [{"principal":1,"route":"api/resource/image/recipe/default.jpg"}];
+                dirImg = [{"principal":1,"route":"api/resource/images/recipe/default.jpg"}];
             }
             try {
                 var existRecipe = await db.recipe.findOne({where:{title:req.body.title}});
@@ -400,6 +401,7 @@ router.post("/generateRecipe", async (req, res) => {
                     const recipe = await db.recipe.create({
                         title : req.body.title,
                         description:req.body.description,
+                        likes:req.body.likes,
                         step_recipes:dataStep,
                         recipe_ingredients:dataIngredients,
                         image_recipes:dirImg
@@ -421,6 +423,30 @@ router.post("/generateRecipe", async (req, res) => {
         }
         res.send(response);
     });
+});
+
+router.get("/getLikedRecipe",async(req,res)=>{
+    const response = new Object();
+    try {
+        var recipes = await db.recipe.findAll({
+            limit:10,
+            order:[['likes','DESC']],
+            include:[{
+                model:db.image_recipe,
+                where:{ principal : 1 }
+            }]
+        });
+        if (recipes) {
+            response.status = "success";
+            response.message = recipes;
+        } else {
+            
+        }
+    } catch (error) {
+        response.status = "fail";
+        response.message = "not recipes";
+    }
+    res.send(response);
 });
 
 router.get("/getLastsRecipe",async(req,res)=>{
