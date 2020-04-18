@@ -6,7 +6,7 @@ const CryptoJS = require("crypto-js");
 const fs = require('fs');
 const util = require("util");
 const multer = require("multer");
-const {Sequelize,Op} = require('sequelize');
+const { Sequelize, Op } = require('sequelize');
 
 // const mkdirSync = util.promisify(fs.mkdirSync);
 
@@ -14,55 +14,55 @@ app.model = (model) => db[model];
 
 
 const storage = multer.diskStorage({
-    destination: function(req,file,cb){
+    destination: function (req, file, cb) {
         var directory;
         // console.log(req.body);
-        
-        if(req.body.type=="user"){
-            directory = "./api/resource/images/users/"+req.body.idOfType;
+
+        if (req.body.type == "user") {
+            directory = "./api/resource/images/users/" + req.body.idOfType;
         }
-        if(req.body.type=="ingredient"){
+        if (req.body.type == "ingredient") {
             directory = "./api/resource/images/ingredient/";
         }
-        if(req.body.type=="recipe"){
-            directory = "./api/resource/images/recipe/"+req.body.title.replace(/\s/g, '');
+        if (req.body.type == "recipe") {
+            directory = "./api/resource/images/recipe/" + req.body.title.replace(/\s/g, '');
         }
         if (fs.existsSync(directory)) {
             console.log("Directory exists.");
         } else {
-            fs.mkdirSync(directory,{ recursive:true });
+            fs.mkdirSync(directory, { recursive: true });
         }
-        cb(null,directory);
+        cb(null, directory);
     },
-    filename:function(req,file,cb){
+    filename: function (req, file, cb) {
         var extension = file.originalname.split(".");
-        cb(null,CryptoJS.SHA1(extension[0])+"-"+Math.round((new Date()).getTime() / 1000)+'.'+extension[1]);
+        cb(null, CryptoJS.SHA1(extension[0]) + "-" + Math.round((new Date()).getTime() / 1000) + '.' + extension[1]);
     }
 });
 
-const fileFilter = async (req,file,cb) => {
+const fileFilter = async (req, file, cb) => {
     const body = req.body;
-    typeSelct = body.type;        
+    typeSelct = body.type;
     console.log("typeSelct");
-        
+
     try {
-    finder = await app.model(typeSelct).findByPk(body.idOfType);
-        if(finder){
-            if(file.mimetype == "image/jpeg" || file.mimetype == "image/jpg" || file.mimetype == "image/png" || file.mimetype == "image/gif"){
-                cb(null,true);
-            }else{
+        finder = await app.model(typeSelct).findByPk(body.idOfType);
+        if (finder) {
+            if (file.mimetype == "image/jpeg" || file.mimetype == "image/jpg" || file.mimetype == "image/png" || file.mimetype == "image/gif") {
+                cb(null, true);
+            } else {
                 req.fileValidationError = 'Suba solo imagenes/gifs';
                 return cb('Suba solo imagenes/gifs');
             }
-        }else{
-            return cb(typeSelct+' don´t exist');
+        } else {
+            return cb(typeSelct + ' don´t exist');
         }
     } catch (error) {
         return cb(error.message);
     }
 }
 
-const upload = multer({storage:storage,fileFilter:fileFilter}).single('imageSend');
+const upload = multer({ storage: storage, fileFilter: fileFilter }).single('imageSend');
 
 router.post("/login", (req, res) => {
     const response = new Object();
@@ -110,23 +110,116 @@ router.post('/checkUser', (req, res) => {
         });
 });
 
-router.get('/getAllUsers', (req, res) => {
+
+// <-------------------------------------- Users routes ----------------------------->
+
+router.get('/users', async (req, res) => {
     const response = new Object();
-    db.user.findAll()
-        .then((users) => {
-            if (users != null) {
-                response.status = "success";
-                response.users = users;
-                res.send(response);
-            } else {
-                response.status = "fail";
-                // response.user = user;
-                res.send(response);
-            }
-        });
+    var users = await db.user.findAll();
+    if (users != null) {
+        response.status = "success";
+        response.users = users;
+        res.send(response);
+    } else {
+        response.status = "fail";
+        // response.user = user;
+        res.send(response);
+    }
 });
 
-router.get('/getChats', async (req, res) => {
+router.get('/users/:idUser', async (req, res) => {
+    const response = new Object();
+
+    if (req.params.idUser != undefined && req.params.idUser != '' && req.params.idUser > 0) {
+        var user = await db.user.findByPk(req.params.idUser);
+        if (user != null) {
+            response.status = "success";
+            response.user = user;
+        } else {
+            response.status = "fail";
+            errors = response.errors != undefined ? response.errors : [];
+            errors.push("No user associated to this id");
+            response.errors = errors;
+
+        }
+    } else {
+        response.status = "fail";
+        errors = response.errors != undefined ? response.errors : [];
+        errors.push("Incorrect idUser");
+        response.errors = errors;
+    }
+    res.send(response);
+
+});
+
+router.put('/users/:idUser', async (req, res) => {
+    const response = new Object();
+    const body = req.body;
+
+    if (req.params.idUser != undefined && req.params.idUser != '' && req.params.idUser > 0) {
+        var user = await db.user.findByPk(req.params.idUser);
+        if (user != null) {
+            response.status = "success";
+            if (body.names != undefined) {
+                user.names = body.names;
+            }
+            if (body.surnames != undefined) {
+                user.surnames = body.surnames;
+            }
+            if (body.bornDate != undefined) {
+                user.bornDate = body.bornDate;
+            }
+            if (body.country != undefined) {
+                user.country = body.country;
+            }
+            if (body.city != undefined) {
+                user.city = body.city;
+            }
+            if (body.location != undefined) {
+                user.location = body.location;
+            }
+            if (body.description != undefined) {
+                user.description = body.description;
+            }
+            if (body.interests != undefined) {
+                user.interests = body.interests;
+            }
+            if (body.lifeStyle != undefined) {
+                user.lifeStyle = body.lifeStyle;
+            }
+            if (body.lookingFor != undefined) {
+                user.lookingFor = body.lookingFor;
+            }
+            if (body.interestedIn != undefined) {
+                user.interestedIn = body.interestedIn;
+            }
+            if (body.gender != undefined) {
+                user.gender = body.gender;
+            }
+            if (body.job != undefined) {
+                user.job = body.job;
+            }
+            user.save();
+            response.user = user;
+        } else {
+            response.status = "fail";
+            errors = response.errors != undefined ? response.errors : [];
+            errors.push("No user associated to this id");
+            response.errors = errors;
+
+        }
+    } else {
+        response.status = "fail";
+        errors = response.errors != undefined ? response.errors : [];
+        errors.push("Incorrect idUser");
+        response.errors = errors;
+    }
+    res.send(response);
+
+});
+// <-------------------------------------- END Users routes ----------------------------->
+
+router.get('/chats', async (req, res) => {
     const response = new Object();
     // Se obtienen los user_chat donde se encuentra el usuario
     var base_chats = await db.user_chat.findAll({ include: [db.chat], attributes: ['idChat'], where: { idUser: req.query.idUser }, });
@@ -163,7 +256,7 @@ router.get('/getChats', async (req, res) => {
     // res.send(base_chats);
 });
 
-router.get('/getMessages', async (req, res) => {
+router.get('/messages', async (req, res) => {
     const response = new Object();
     // Se obtienen los user_chat donde se encuentra el usuario
 
@@ -231,22 +324,22 @@ router.get('/getMessages', async (req, res) => {
     res.send(response);
 });
 
-router.post("/checkMail",(req,res) => {
+router.post("/checkMail", (req, res) => {
     const response = new Object();
     var body = req.body;
     console.log(body.email);
-    
+
     db.user.findAll({
-        where:{email:body.email}
-    }).then((err)=>{
-        if(err.length!=0){
-            response.status="fail";
-            response.description="Usuario existente";
+        where: { email: body.email }
+    }).then((err) => {
+        if (err.length != 0) {
+            response.status = "fail";
+            response.description = "Usuario existente";
             res.send(response);
         }
-        if(err.length==0){
-            response.status="success";
-            response.description="Usuario inexistente";
+        if (err.length == 0) {
+            response.status = "success";
+            response.description = "Usuario inexistente";
             res.send(response);
         }
     });
@@ -256,191 +349,191 @@ router.post("/signup", async (req, res) => {
     const response = new Object();
     var body = req.body;
 
-    const [user,created] = await db.user.findOrCreate({
-        where:{email:body.email},
-        defaults:{
-            names:body.names,
-            surnames:body.surnames,
-            bornDate:body.bornDate,
-            gender:body.gender,
-            interestedIn:body.interestedIn,
-            email:body.email,
-            lookingFor:body.lookingFor,
-            lifeStyle:body.lifeStyle,
-            password:CryptoJS.SHA1(body.password).toString(),
-            f_active:1,
-            nickName:body.email.split("@")[0]
+    const [user, created] = await db.user.findOrCreate({
+        where: { email: body.email },
+        defaults: {
+            names: body.names,
+            surnames: body.surnames,
+            bornDate: body.bornDate,
+            gender: body.gender,
+            interestedIn: body.interestedIn,
+            email: body.email,
+            lookingFor: body.lookingFor,
+            lifeStyle: body.lifeStyle,
+            password: CryptoJS.SHA1(body.password).toString(),
+            f_active: 1,
+            nickName: body.email.split("@")[0]
         }
     });
 
-    if(created){
+    if (created) {
         response.status = 'success';
-        response.message="user created";
+        response.message = "user created";
         response.api_token = 'alsjablksjbalkjsbas';
         response.user = user;
-    }else{
-        response.status="fail";
-        response.message="existing user";
+    } else {
+        response.status = "fail";
+        response.message = "existing user";
     }
     res.send(response);
 });
 
-router.post('/uploadImage',async(req,res) => {
+router.post('/uploadImage', async (req, res) => {
     const response = new Object();
-    await upload(req,res,async(err)=>{        
-        if(err){
+    await upload(req, res, async (err) => {
+        if (err) {
             response.status = 'fail';
             response.message = err;
-        }else{
+        } else {
             try {
-                const image = await app.model("image_"+req.body.type).create({
-                    type:req.body.type,
-                    idOfType:req.body.idOfType,
-                    principal:req.body.principal,
-                    route:req.file.path
+                const image = await app.model("image_" + req.body.type).create({
+                    type: req.body.type,
+                    idOfType: req.body.idOfType,
+                    principal: req.body.principal,
+                    route: req.file.path
                 });
-                if(image){
+                if (image) {
                     response.status = 'success';
-                    response.message="Image Uploaded";
+                    response.message = "Image Uploaded";
                     response.image = image;
-                }else{
+                } else {
                     response.status = 'fail';
-                    response.message="Something happend";
+                    response.message = "Something happend";
                 }
             } catch (error) {
                 response.status = 'fail';
-                response.message=error.message;
-            }      
+                response.message = error.message;
+            }
         }
         res.send(response);
     });
 });
 
-const ingredientFilter = async (req,file,cb)=>{
+const ingredientFilter = async (req, file, cb) => {
     // console.log(file);
-    if(file.mimetype == "image/jpeg" || file.mimetype == "image/jpg" || file.mimetype == "image/png"){
-        cb(null,true);
-    }else{
+    if (file.mimetype == "image/jpeg" || file.mimetype == "image/jpg" || file.mimetype == "image/png") {
+        cb(null, true);
+    } else {
         req.fileValidationError = 'Suba solo imagenes/gifs';
         return cb('Suba solo imagenes/gifs');
     }
 }
 
-const uploadIngredient = multer({storage:storage,fileFilter:ingredientFilter}).single('imageSend');
+const uploadIngredient = multer({ storage: storage, fileFilter: ingredientFilter }).single('imageSend');
 
-router.post('/saveIngredient',async(req,res)=>{
+router.post('/saveIngredient', async (req, res) => {
     const response = new Object();
     var dirImg;
-        await uploadIngredient(req,res,async(err)=>{
-            if(typeof req.file !== "undefined"){
-                response.message="immage send";
-                dirImg = "./api/resource/images/ingredient/"+req.file.path;
-            }else{
-                response.status = 'fail';
-                response.message=err;
-                dirImg = "./api/resource/images/ingredient/default.jpg";
-            }            
-            const [ingredient,created] = await db.ingredient.findOrCreate({
-                where:{name:req.body.name},
-                defaults:{
-                    name:req.body.name,
-                    routeImage:dirImg
-                }
-            });
-
-            if(created){
-                response.status = 'success';
-                response.message="ingredient created";
-                response.ingredient = ingredient;
-            }else{
-                response.status="fail";
-                response.message="existing ingredient";
+    await uploadIngredient(req, res, async (err) => {
+        if (typeof req.file !== "undefined") {
+            response.message = "immage send";
+            dirImg = "./api/resource/images/ingredient/" + req.file.path;
+        } else {
+            response.status = 'fail';
+            response.message = err;
+            dirImg = "./api/resource/images/ingredient/default.jpg";
+        }
+        const [ingredient, created] = await db.ingredient.findOrCreate({
+            where: { name: req.body.name },
+            defaults: {
+                name: req.body.name,
+                routeImage: dirImg
             }
-            res.send(response);
         });
+
+        if (created) {
+            response.status = 'success';
+            response.message = "ingredient created";
+            response.ingredient = ingredient;
+        } else {
+            response.status = "fail";
+            response.message = "existing ingredient";
+        }
+        res.send(response);
+    });
 });
 
 
-const recipeFilter = async (req,file,cb) => {
-    if(file.mimetype == "image/jpeg" || file.mimetype == "image/jpg" || file.mimetype == "image/png" || file.mimetype == "image/gif"){
-        cb(null,true);
-    }else{
+const recipeFilter = async (req, file, cb) => {
+    if (file.mimetype == "image/jpeg" || file.mimetype == "image/jpg" || file.mimetype == "image/png" || file.mimetype == "image/gif") {
+        cb(null, true);
+    } else {
         req.fileValidationError = 'Suba solo imagenes/gifs';
         return cb('Suba solo imagenes/gifs');
     }
 }
 
-const uploadRecipie = multer({storage:storage,fileFilter:recipeFilter}).array('images',6);
+const uploadRecipie = multer({ storage: storage, fileFilter: recipeFilter }).array('images', 6);
 
 router.post("/generateRecipe", async (req, res) => {
     const response = new Object();
     var dirImg;
-    await uploadRecipie(req,res,async(err)=>{
+    await uploadRecipie(req, res, async (err) => {
         if (err) {
-            response.status="fail";
-            response.message=err;
+            response.status = "fail";
+            response.message = err;
         } else {
-            if(req.files.length!=0){
+            if (req.files.length != 0) {
                 dirImg = req.files.map(file => {
-                    var obj={};
+                    var obj = {};
                     obj["principal"] = 1;
                     obj["route"] = file.path;
                     return obj
-                });               
-            }else{
-                dirImg = [{"principal":1,"route":"api/resource/images/recipe/default.jpg"}];
+                });
+            } else {
+                dirImg = [{ "principal": 1, "route": "api/resource/images/recipe/default.jpg" }];
             }
             try {
-                var existRecipe = await db.recipe.findOne({where:{title:req.body.title}});
+                var existRecipe = await db.recipe.findOne({ where: { title: req.body.title } });
                 if (existRecipe) {
-                    response.status="fail";
-                    response.message="existing recipe";
+                    response.status = "fail";
+                    response.message = "existing recipe";
                 } else {
                     const dataStep = JSON.parse(req.body.stepRecipe);
                     const dataIngredients = JSON.parse(req.body.recipeIngredient);
                     const recipe = await db.recipe.create({
-                        title : req.body.title,
-                        description:req.body.description,
-                        likes:req.body.likes,
-                        step_recipes:dataStep,
-                        recipe_ingredients:dataIngredients,
-                        image_recipes:dirImg
-                    },{
-                        include:[db.step_recipe,db.recipe_ingredient,db.image_recipe]
+                        title: req.body.title,
+                        description: req.body.description,
+                        likes: req.body.likes,
+                        step_recipes: dataStep,
+                        recipe_ingredients: dataIngredients,
+                        image_recipes: dirImg
+                    }, {
+                        include: [db.step_recipe, db.recipe_ingredient, db.image_recipe]
                     });
-                    if(recipe){
-                        response.status="success";
-                        response.message=recipe;
-                    }else{
-                        response.status="fail";
-                        response.message="error insertando";
+                    if (recipe) {
+                        response.status = "success";
+                        response.message = recipe;
+                    } else {
+                        response.status = "fail";
+                        response.message = "error insertando";
                     }
                 }
             } catch (error) {
-                response.status="fail";
-                response.status=error.message;
+                response.status = "fail";
+                response.status = error.message;
             }
         }
         res.send(response);
     });
 });
 
-router.get("/getLikedRecipe",async(req,res)=>{
+router.get("/getLikedRecipe", async (req, res) => {
     const response = new Object();
     try {
         var recipes = await db.recipe.findAll({
-            limit:10,
-            order:[['likes','DESC']],
-            include:[{
-                model:db.image_recipe,
-                where:{ principal : 1 }
+            limit: 10,
+            order: [['likes', 'DESC']],
+            include: [{
+                model: db.image_recipe,
+                where: { principal: 1 }
             }]
         });
         if (recipes) {
             response.status = "success";
             response.message = recipes;
         } else {
-            
+
         }
     } catch (error) {
         response.status = "fail";
@@ -449,21 +542,21 @@ router.get("/getLikedRecipe",async(req,res)=>{
     res.send(response);
 });
 
-router.get("/getLastsRecipe",async(req,res)=>{
+router.get("/getLastsRecipe", async (req, res) => {
     const response = new Object();
     try {
         var recipes = await db.recipe.findAll({
-            limit:5,
-            order:[['idRecipe', 'DESC']],
-            include:[{
-                model:db.image_recipe,
-                where: { principal : 1}
+            limit: 5,
+            order: [['idRecipe', 'DESC']],
+            include: [{
+                model: db.image_recipe,
+                where: { principal: 1 }
             }]
         });
-        if(recipes){
+        if (recipes) {
             response.status = "success";
             response.message = recipes;
-        }else{
+        } else {
             response.status = "fail";
             response.message = "not recipes";
         }
@@ -474,48 +567,48 @@ router.get("/getLastsRecipe",async(req,res)=>{
     res.send(response);
 });
 
-router.get("/getRandomRecipe",async(req,res)=>{
+router.get("/getRandomRecipe", async (req, res) => {
     var idExisting;
     if (req.body.idExisting) {
         idExisting = JSON.parse(req.body.idExisting);
     } else {
         idExisting = []
     }
-    
+
     var moreRandom = await db.recipe.findAll({
-        limit:10,
-        order:Sequelize.literal('rand()'),
-        where:{
-            idRecipe:{
+        limit: 10,
+        order: Sequelize.literal('rand()'),
+        where: {
+            idRecipe: {
                 [Op.notIn]: idExisting,
             }
         },
-        include:[{
-            model:db.image_recipe,
-            where: { principal : 1}
+        include: [{
+            model: db.image_recipe,
+            where: { principal: 1 }
         }]
     });
     res.send(moreRandom);
 });
 
-router.get("/getRecipe",async(req,res)=>{
+router.get("/getRecipe", async (req, res) => {
     const response = new Object();
     var recipe = await db.recipe.findByPk(
         req.body.idRecipe,
         {
-            include:[
-                {model:db.step_recipe},
-                {model:db.recipe_ingredient},
-                {model:db.image_recipe}
+            include: [
+                { model: db.step_recipe },
+                { model: db.recipe_ingredient },
+                { model: db.image_recipe }
             ]
         }
     );
-    if(recipe){
-        response.status="success";
-        response.message=recipe;
-    }else{
-        response.status="fail";
-        response.message="404 recipe not found";
+    if (recipe) {
+        response.status = "success";
+        response.message = recipe;
+    } else {
+        response.status = "fail";
+        response.message = "404 recipe not found";
     }
     res.send(response);
 });
