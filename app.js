@@ -6,8 +6,10 @@ const PORT = process.env.PORT || 3002
 const PORTCHAT = process.env.PORT || 3003
 const server = require('http').createServer(app);
 const io = require('socket.io').listen(server);
+const config = require('./config/app_config.js');
+const jwt = require('jsonwebtoken');
 
-app.use(bodyParser.urlencoded({ extended:false }));
+app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
 const apiRoutes = require('./routes/api');
@@ -29,8 +31,19 @@ const nsp = io.of('/room');
 const connections = {};
 
 nsp.on('connection', (socket) => {
-  var idUser = socket.handshake.query.userId;
-  connections[idUser] = socket.id;
+  var idUser;
+
+  jwt.verify(socket.handshake.query.token, config.secret, (err, decoded) => {
+    if (err) {
+      console.log("Error jwt.verify en socket io connection: " + err);
+    }
+    idUser = decoded.idUser;
+  });
+  if (idUser != null)
+    connections[idUser] = socket.id;
+  else
+    return false;
+
   console.log("Rooms:");
   console.log(connections);
 

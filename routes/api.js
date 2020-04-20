@@ -1,13 +1,15 @@
 const express = require("express");
+const config = require('../config/app_config.js');
 const app = express();
 const router = express.Router();
 const db = require('../models');
+const jwt = require('jsonwebtoken');
 const CryptoJS = require("crypto-js");
 const fs = require('fs');
 const util = require("util");
 const multer = require("multer");
 const { Sequelize, Op } = require('sequelize');
-
+const jwtAuth = require('../auth/verifyJwtToken');
 // const mkdirSync = util.promisify(fs.mkdirSync);
 
 app.model = (model) => db[model];
@@ -64,6 +66,38 @@ const fileFilter = async (req, file, cb) => {
 
 const upload = multer({ storage: storage, fileFilter: fileFilter }).single('imageSend');
 
+router.post("/signup", async (req, res) => {
+    const response = new Object();
+    var body = req.body;
+
+    const [user, created] = await db.user.findOrCreate({
+        where: { email: body.email },
+        defaults: {
+            names: body.names,
+            surnames: body.surnames,
+            bornDate: body.bornDate,
+            gender: body.gender,
+            interestedIn: body.interestedIn,
+            email: body.email,
+            lookingFor: body.lookingFor,
+            lifeStyle: body.lifeStyle,
+            password: CryptoJS.SHA1(body.password).toString(),
+            f_active: 1,
+            nickName: body.email.split("@")[0]
+        }
+    });
+
+    if (created) {
+        response.status = 'success';
+        response.message = "user created";
+        response.api_token = jwt.sign({ idUser: user.idUser }, config.secret, { expiresIn: 86400 });
+    } else {
+        response.status = "fail";
+        response.message = "existing user";
+    }
+    res.send(response);
+});
+
 router.post("/login", (req, res) => {
     const response = new Object();
     var passwordEncripted = CryptoJS.SHA1(req.body.password).toString();
@@ -78,8 +112,9 @@ router.post("/login", (req, res) => {
         if (user != null) {
             if (user.password == passwordEncripted) {
                 response.status = 'success';
-                response.api_token = 'alsjablksjbalkjsbas';
-                response.user = user;
+                response.api_token = jwt.sign({ idUser: user.idUser }, config.secret, { expiresIn: 86400 });
+
+                // response.user = user;
             } else {
                 response.status = 'fail';
                 response.error = 'contraseña incorrecta';
@@ -127,7 +162,7 @@ router.get('/users', async (req, res) => {
     }
 });
 
-router.get('/users/:idUser', async (req, res) => {
+router.get('/users/:idUser',[jwtAuth.verifyToken], async (req, res) => {
     const response = new Object();
 
     if (req.params.idUser != undefined && req.params.idUser != '' && req.params.idUser > 0) {
@@ -219,10 +254,10 @@ router.put('/users/:idUser', async (req, res) => {
 });
 // <-------------------------------------- END Users routes ----------------------------->
 
-router.get('/chats', async (req, res) => {
+router.get('/chats', [jwtAuth.verifyToken], async (req, res) => {
     const response = new Object();
     // Se obtienen los user_chat donde se encuentra el usuario
-    var base_chats = await db.user_chat.findAll({ include: [db.chat], attributes: ['idChat'], where: { idUser: req.query.idUser }, });
+    var base_chats = await db.user_chat.findAll({ include: [db.chat], attributes: ['idChat'], where: { idUser: req.idUser }, });
     if (base_chats != null) {
         var chats = [];
         // Se recorren todos los idChat a los que pertenece y se buscan y listan los usuarios de cada uno
@@ -256,7 +291,7 @@ router.get('/chats', async (req, res) => {
     // res.send(base_chats);
 });
 
-router.get('/messages', async (req, res) => {
+router.get('/messages', [jwtAuth.verifyToken], async (req, res) => {
     const response = new Object();
     // Se obtienen los user_chat donde se encuentra el usuario
 
@@ -294,7 +329,7 @@ router.get('/messages', async (req, res) => {
 
     if (response.errors == undefined) {
 
-        var user_chat = await db.user_chat.findAll({ where: { idChat: req.query.idChat, idUser: req.query.idUser } });
+        var user_chat = await db.user_chat.findAll({ where: { idChat: req.query.idChat, idUser: req.idUser } });
         if (user_chat != null) {
             var last10Messages = await db.message.findAll({
                 where: whereCondition,
@@ -345,38 +380,7 @@ router.post("/checkMail", (req, res) => {
     });
 });
 
-router.post("/signup", async (req, res) => {
-    const response = new Object();
-    var body = req.body;
 
-    const [user, created] = await db.user.findOrCreate({
-        where: { email: body.email },
-        defaults: {
-            names: body.names,
-            surnames: body.surnames,
-            bornDate: body.bornDate,
-            gender: body.gender,
-            interestedIn: body.interestedIn,
-            email: body.email,
-            lookingFor: body.lookingFor,
-            lifeStyle: body.lifeStyle,
-            password: CryptoJS.SHA1(body.password).toString(),
-            f_active: 1,
-            nickName: body.email.split("@")[0]
-        }
-    });
-
-    if (created) {
-        response.status = 'success';
-        response.message = "user created";
-        response.api_token = 'alsjablksjbalkjsbas';
-        response.user = user;
-    } else {
-        response.status = "fail";
-        response.message = "existing user";
-    }
-    res.send(response);
-});
 
 router.post('/uploadImage', async (req, res) => {
     const response = new Object();
