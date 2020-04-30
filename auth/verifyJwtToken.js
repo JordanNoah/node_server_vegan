@@ -3,8 +3,11 @@ const config = require('../config/app_config.js');
 
 verifyToken = (req, res, next) => {
     console.log("verifing token");
-    
+
     let token = req.headers['x-access-token'];
+    console.log("*******Token recibido******");
+    console.log(token);
+
 
     if (!token) {
         return res.send({

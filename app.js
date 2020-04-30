@@ -46,6 +46,7 @@ nsp.on('connection', (socket) => {
 
   console.log("Rooms:");
   console.log(connections);
+  console.log("Qery: " + JSON.stringify(socket.handshake.query));
 
   socket.on('send message', async (message) => {
     // console.log('Message is received :', message);

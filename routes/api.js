@@ -10,7 +10,11 @@ const util = require("util");
 const multer = require("multer");
 const { Sequelize, Op } = require('sequelize');
 const jwtAuth = require('../auth/verifyJwtToken');
+const path = require('path');
+const axios = require('axios')
+
 // const mkdirSync = util.promisify(fs.mkdirSync);
+
 
 app.model = (model) => db[model];
 
@@ -18,7 +22,6 @@ app.model = (model) => db[model];
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         var directory;
-        // console.log(req.body);
 
         if (req.body.type == "user") {
             directory = "./api/resource/images/users/" + req.body.idOfType;
@@ -49,6 +52,8 @@ const fileFilter = async (req, file, cb) => {
 
     try {
         finder = await app.model(typeSelct).findByPk(body.idOfType);
+        console.log(file.mimetype);
+
         if (finder) {
             if (file.mimetype == "image/jpeg" || file.mimetype == "image/jpg" || file.mimetype == "image/png" || file.mimetype == "image/gif") {
                 cb(null, true);
@@ -122,12 +127,76 @@ router.post("/login", (req, res) => {
         } else {
             response.status = 'fail';
             response.error = 'usuario inexistente';
-            res.send(response);
         }
         res.send(response);
     });
+});
+
+router.post("/loginWithFacebook", async (req, res) => {
+    const response = new Object();
+    // https://graph.facebook.com/v2.12/me?fields=name,picture,email&access_token=${token}
+    var fbToken = req.headers['fb-token'];
+    response.status = 'fail';
+    try {
+        const responseFb = await axios.get('https://graph.facebook.com/v2.12/me?fields=name,picture,email&access_token=' + fbToken);
+        if (responseFb.status == 200) {
+            db.user.findOne({
+                where: {
+                    email: responseFb.data.email,
+                }
+            }).then((user) => {
+                if (user != null) {
+                    response.status = 'success';
+                    response.api_token = jwt.sign({ idUser: user.idUser }, config.secret, { expiresIn: 86400 });
+                } else {
+                    response.status = 'fail';
+                    response.error = 'usuario inexistente';
+                }
+                res.send(response);
+            });
+        }
+    } catch (error) {
+        console.log(error);
+        response.status = 'fail';
+        response.error = 'Error fb';
+        res.send(response);
+
+    }
 
 });
+router.post("/loginWithGoogle", async (req, res) => {
+    const response = new Object();
+    // https://graph.facebook.com/v2.12/me?fields=name,picture,email&access_token=${token}
+    var googleToken = req.headers['google-token'];
+    response.status = 'fail';
+    try {
+        const responseGoogle = await axios.get('https://oauth2.googleapis.com/tokeninfo?access_token=' + googleToken);
+        if (responseGoogle.status == 200) {
+            db.user.findOne({
+                where: {
+                    email: responseGoogle.data.email,
+                }
+            }).then((user) => {
+                if (user != null) {
+                    response.status = 'success';
+                    response.api_token = jwt.sign({ idUser: user.idUser }, config.secret, { expiresIn: 86400 });
+                } else {
+                    response.status = 'fail';
+                    response.error = 'usuario inexistente';
+                }
+                res.send(response);
+            });
+        }
+    } catch (error) {
+        console.log(error);
+        response.status = 'fail';
+        response.error = 'Error google';
+        res.send(response);
+
+    }
+
+});
+
 
 router.post('/checkUser', (req, res) => {
     const response = new Object();
@@ -150,7 +219,7 @@ router.post('/checkUser', (req, res) => {
 
 router.get('/users', async (req, res) => {
     const response = new Object();
-    var users = await db.user.findAll();
+    var users = await db.user.findAll({ include: [{ model: db.image_user, attributes: ['idImage', 'principal', 'idUser'] }] });
     if (users != null) {
         response.status = "success";
         response.users = users;
@@ -162,11 +231,11 @@ router.get('/users', async (req, res) => {
     }
 });
 
-router.get('/users/:idUser',[jwtAuth.verifyToken], async (req, res) => {
+router.get('/users/:idUser', [jwtAuth.verifyToken], async (req, res) => {
     const response = new Object();
 
     if (req.params.idUser != undefined && req.params.idUser != '' && req.params.idUser > 0) {
-        var user = await db.user.findByPk(req.params.idUser);
+        var user = await db.user.findOne({ where: { idUser: req.params.idUser }, include: [{ model: db.image_user, attributes: ['idImage', 'principal', 'idUser'] }] });
         if (user != null) {
             response.status = "success";
             response.user = user;
@@ -187,12 +256,12 @@ router.get('/users/:idUser',[jwtAuth.verifyToken], async (req, res) => {
 
 });
 
-router.put('/users/:idUser', async (req, res) => {
+router.put('/users', [jwtAuth.verifyToken], async (req, res) => {
     const response = new Object();
     const body = req.body;
 
-    if (req.params.idUser != undefined && req.params.idUser != '' && req.params.idUser > 0) {
-        var user = await db.user.findByPk(req.params.idUser);
+    if (req.idUser != undefined && req.idUser != '' && req.idUser > 0) {
+        var user = await db.user.findByPk(req.idUser);
         if (user != null) {
             response.status = "success";
             if (body.names != undefined) {
@@ -382,20 +451,33 @@ router.post("/checkMail", (req, res) => {
 
 
 
-router.post('/uploadImage', async (req, res) => {
+router.post('/uploadImage', [jwtAuth.verifyToken], async (req, res) => {
     const response = new Object();
     await upload(req, res, async (err) => {
         if (err) {
+            console.log("Error: " + JSON.stringify(err));
+
             response.status = 'fail';
             response.message = err;
+            res.status(500).send(response)
         } else {
             try {
-                const image = await app.model("image_" + req.body.type).create({
+                var obj = {
                     type: req.body.type,
-                    idOfType: req.body.idOfType,
                     principal: req.body.principal,
                     route: req.file.path
-                });
+                };
+                switch (req.body.type) {
+                    case 'user':
+                        obj.idUser = req.body.idOfType;
+                        break;
+                    case 'recipe':
+                        obj.idRecipe = req.body.idOfType;
+                        break;
+                    default:
+                        break;
+                }
+                const image = await app.model("image_" + req.body.type).create(obj);
                 if (image) {
                     response.status = 'success';
                     response.message = "Image Uploaded";
@@ -405,13 +487,47 @@ router.post('/uploadImage', async (req, res) => {
                     response.message = "Something happend";
                 }
             } catch (error) {
+
                 response.status = 'fail';
                 response.message = error.message;
             }
+            res.status(200).send(response);
         }
-        res.send(response);
     });
 });
+
+router.get('/userImages/:idImage', [jwtAuth.verifyToken], async (req, res) => {
+    // console.log(path.dirname());
+    const response = new Object();
+    console.log(req.params.idImage);
+
+    var user_image = await db.image_user.findByPk(req.params.idImage);
+    if (user_image) {
+        res.sendFile(path.resolve(__dirname, '../', user_image.route));
+    } else {
+        response.status = 'fail';
+        response.message = "Error";
+        res.send(response);
+    }
+    // res.sendFile(__dirname+'/api/resource/images/users/1/64d2e7225321f6cce1cd4b3b6d4ef5f0878743e7-1587519446.jpg');
+});
+
+router.get('/userImages', [jwtAuth.verifyToken], async (req, res) => {
+    const response = new Object();
+    // Se obtienen los user_chat donde se encuentra el usuario
+    console.log(req.idUser);
+
+    var user_images = await db.image_user.findAll({ where: { idUser: req.idUser }, attributes: ['idImage', 'principal', 'idUser'] });
+    if (user_images != null) {
+        response.status = "success";
+        response.images = user_images;
+    } else {
+        response.status = "fail";
+    }
+    res.send(response);
+
+});
+
 
 const ingredientFilter = async (req, file, cb) => {
     // console.log(file);
@@ -615,6 +731,68 @@ router.get("/getRecipe", async (req, res) => {
         response.message = "404 recipe not found";
     }
     res.send(response);
+});
+
+router.post("/likes", [jwtAuth.verifyToken], async (req, res) => {
+    const response = Object();
+    try {
+        var idUser = req.idUser;
+        if (req.body.idUserLiked != undefined && req.body.idUserLiked != "" && req.body.idUserLiked > 0) {
+            var idUserLiked = parseInt(req.body.idUserLiked);
+            var userLiked = await db.user.findByPk(idUserLiked);
+            if (userLiked) {
+                const [like, created] = await db.like.findOrCreate({
+                    where: { idUser: idUser, idUserLiked: idUserLiked },
+                    defaults: { f_liked: req.body.f_liked }
+                });
+                console.log(created);
+                if (!created) {
+                    like.f_liked = req.body.f_liked;
+                    like.save();
+                }
+                if (like) {
+                    response.status = "success";
+                }
+            } else {
+                response.status = "fail";
+                errors = response.errors != undefined ? response.errors : [];
+                errors.push("idUserLiked does not exist");
+                response.errors = errors;
+            }
+        } else {
+            response.status = "fail";
+            errors = response.errors != undefined ? response.errors : [];
+            errors.push("Incorrect idUserLiked");
+            response.errors = errors;
+
+        }
+    } catch (error) {
+        console.log(error);
+
+        response.status = "fail";
+        errors = response.errors != undefined ? response.errors : [];
+        errors.push("Server error");
+        response.errors = errors;
+    }
+    res.send(response);
+
+});
+
+router.get("/likes", [jwtAuth.verifyToken], async (req, res) => {
+    const response = Object();
+    try {
+        var likes = await db.like.findAll({ where: { idUser: req.idUser }, arguments: ['idLike', 'idUser', 'idUserLiked', 'f_liked'] });
+        response.likes = likes;
+    } catch (error) {
+        console.log(error);
+
+        response.status = "fail";
+        errors = response.errors != undefined ? response.errors : [];
+        errors.push("Server error");
+        response.errors = errors;
+    }
+    res.send(response);
+
 });
 
 module.exports = router;

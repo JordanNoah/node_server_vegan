@@ -60,6 +60,10 @@ db.recipe.hasMany(db.image_recipe,{
   foreignKey:'idRecipe'
 });
 
+db.user.hasMany(db.image_user,{
+  foreignKey:'idUser'
+});
+
 db.recipe_ingredient.hasOne(db.ingredient,{
   foreignKey:'idIngredient',
   sourceKey:'idIngredient',
