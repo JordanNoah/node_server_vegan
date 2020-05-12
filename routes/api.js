@@ -336,13 +336,25 @@ router.get('/chats', [jwtAuth.verifyToken], async (req, res) => {
             new_chat.id = chat.idChat;
             new_chat.name = chat.chat.nameChat;
             new_chat.users = [];
-            var usersByChat = await db.user_chat.findAll({ include: [db.user], attributes: ['idUser'], where: { idChat: chat.idChat } });
+            var usersByChat = await db.user_chat.findAll({
+                include: [{
+                    model: db.user,
+                    include: [{
+                        model: db.image_user,
+                        attributes: ['idImage', 'principal']
+                    }]
+                }],
+                attributes: ['idUser'],
+                where: { idChat: chat.idChat }
+            });
             for (const user of usersByChat) {
                 var user_in_chat = Object();
                 user_in_chat.idUser = user.idUser;
                 user_in_chat.names = user.user.names;
                 user_in_chat.surnames = user.user.surnames;
                 user_in_chat.email = user.user.email;
+                user_in_chat.images = user.user.image_users;
+
                 new_chat.users.push(user_in_chat);
             }
 
@@ -353,6 +365,48 @@ router.get('/chats', [jwtAuth.verifyToken], async (req, res) => {
         // console.log(chats);
         response.status = "success";
         response.chats = chats;
+    } else {
+        response.status = "fail";
+    }
+    res.send(response);
+    // res.send(base_chats);
+});
+
+router.get('/chats/:idChat', [jwtAuth.verifyToken], async (req, res) => {
+    const response = new Object();
+    // Se obtienen los user_chat donde se encuentra el usuario
+    var chat = await db.user_chat.findOne({ include: [db.chat], attributes: ['idChat'], where: { idChat: req.params.idChat }, });
+    if (chat != null) {
+        var new_chat = Object();
+        new_chat.id = chat.idChat;
+        new_chat.name = chat.chat.nameChat;
+        new_chat.users = [];
+        var usersByChat = await db.user_chat.findAll({
+            include: [{
+                model: db.user,
+                include: [{
+                    model: db.image_user,
+                    attributes: ['idImage', 'principal']
+                }]
+            }],
+            attributes: ['idUser'],
+            where: { idChat: chat.idChat }
+        });
+        for (const user of usersByChat) {
+            var user_in_chat = Object();
+            user_in_chat.idUser = user.idUser;
+            user_in_chat.names = user.user.names;
+            user_in_chat.surnames = user.user.surnames;
+            user_in_chat.email = user.user.email;
+            user_in_chat.images = user.user.image_users;
+
+            new_chat.users.push(user_in_chat);
+        }
+
+        // console.log(new_chat);
+        // console.log(chats);
+        response.status = "success";
+        response.chat = new_chat;
     } else {
         response.status = "fail";
     }
@@ -466,6 +520,7 @@ router.post('/uploadImage', [jwtAuth.verifyToken], async (req, res) => {
                     type: req.body.type,
                     principal: req.body.principal,
                     route: req.file.path
+                    // route: req.body.idOfType + "/" + req.file.filename
                 };
                 switch (req.body.type) {
                     case 'user':
@@ -496,19 +551,19 @@ router.post('/uploadImage', [jwtAuth.verifyToken], async (req, res) => {
     });
 });
 
-router.get('/userImages/:idImage', [jwtAuth.verifyToken], async (req, res) => {
+router.get('/userImages/:idImage', async (req, res) => {
     // console.log(path.dirname());
-    const response = new Object();
     console.log(req.params.idImage);
 
     var user_image = await db.image_user.findByPk(req.params.idImage);
+
     if (user_image) {
+        // express.static(path.resolve(__dirname, '../', user_image.route));
         res.sendFile(path.resolve(__dirname, '../', user_image.route));
     } else {
-        response.status = 'fail';
-        response.message = "Error";
-        res.send(response);
+        res.status(500).send("not found");
     }
+
     // res.sendFile(__dirname+'/api/resource/images/users/1/64d2e7225321f6cce1cd4b3b6d4ef5f0878743e7-1587519446.jpg');
 });
 
@@ -781,7 +836,19 @@ router.post("/likes", [jwtAuth.verifyToken], async (req, res) => {
 router.get("/likes", [jwtAuth.verifyToken], async (req, res) => {
     const response = Object();
     try {
-        var likes = await db.like.findAll({ where: { idUser: req.idUser }, arguments: ['idLike', 'idUser', 'idUserLiked', 'f_liked'] });
+        var likes = await db.like.findAll({
+            where: { idUser: req.idUser, [Op.not]: { 'f_liked': false } },
+            arguments: ['idLike', 'idUser', 'idUserLiked', 'f_liked'],
+            include: [
+                {
+                    model: db.user, attributes: [
+                        'names', 'surnames', 'bornDate', 'email', 'country', 'city', 'location', 'description'
+                    ],
+                    include: [{ model: db.image_user, attributes: ['idImage', 'principal'] }]
+                },
+            ]
+        });
+        response.status = 'success';
         response.likes = likes;
     } catch (error) {
         console.log(error);
