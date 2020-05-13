@@ -66,7 +66,28 @@ db.recipe_ingredient.hasOne(db.ingredient,{
   constraints:false
 });
 
+db.user.hasMany(db.liked_recipe,{
+  foreignKey:'idUser'
+});
+db.recipe.hasMany(db.liked_recipe,{
+  foreignKey:'idRecipe'
+});
 
+db.liked_recipe.belongsTo(db.recipe,{
+  foreignKey:"idRecipe"
+});
+
+db.recipe_comment.hasOne(db.user,{
+  foreignKey: 'idUser',
+  sourceKey: 'idUser',
+  constraints:false
+});
+
+db.recipe_comment.hasOne(db.recipe,{
+  foreignKey: 'idRecipe',
+  sourceKey: 'idRecipe',
+  constraints:false
+});
 
 // db.ingredient.hasOne(db.recipe_ingredient,{
 //   foreignKey:"idIngredient"

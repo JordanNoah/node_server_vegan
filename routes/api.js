@@ -334,11 +334,11 @@ router.post('/saveIngredient',async(req,res)=>{
         await uploadIngredient(req,res,async(err)=>{
             if(typeof req.file !== "undefined"){
                 response.message="immage send";
-                dirImg = "./api/resource/images/ingredient/"+req.file.path;
+                dirImg = req.file.path;
             }else{
                 response.status = 'fail';
                 response.message=err;
-                dirImg = "./api/resource/images/ingredient/default.jpg";
+                dirImg = "api/resource/images/ingredient/default.jpg";
             }            
             const [ingredient,created] = await db.ingredient.findOrCreate({
                 where:{name:req.body.name},
@@ -402,9 +402,11 @@ router.post("/generateRecipe", async (req, res) => {
                         title : req.body.title,
                         description:req.body.description,
                         likes:req.body.likes,
+                        approximateTime:req.body.approximateTime,
+                        difficulty:req.body.difficulty,
                         step_recipes:dataStep,
                         recipe_ingredients:dataIngredients,
-                        image_recipes:dirImg
+                        image_recipes:dirImg,
                     },{
                         include:[db.step_recipe,db.recipe_ingredient,db.image_recipe]
                     });
@@ -425,26 +427,37 @@ router.post("/generateRecipe", async (req, res) => {
     });
 });
 
+router.get("/getIdsLikedRecipe",async(req,res)=>{
+    const response = new Object();
+    try {
+        var getFavorites = await db.liked_recipe.findAll({
+            attributes:['idRecipe'],
+            where:[{
+                idUser:req.query.idUser
+            }]
+        });
+        response.status="success";
+        response.message=getFavorites;
+    } catch (error) {
+        response.status="fail";
+        response.message=error.message;
+    }
+    res.send(response);
+});
+
 router.get("/getLikedRecipe",async(req,res)=>{
     const response = new Object();
     try {
-        var recipes = await db.recipe.findAll({
-            limit:10,
-            order:[['likes','DESC']],
-            include:[{
-                model:db.image_recipe,
-                where:{ principal : 1 }
-            }]
+        var getFavorites = await db.liked_recipe.findAll({
+            include:[
+                {model:db.recipe,include:[{model:db.image_recipe,where:{principal:1},required:false,limit:1}]},
+            ]
         });
-        if (recipes) {
-            response.status = "success";
-            response.message = recipes;
-        } else {
-            
-        }
+        response.status="success";
+        response.message=getFavorites;
     } catch (error) {
-        response.status = "fail";
-        response.message = "not recipes";
+        response.status="fail";
+        response.message=error.message;
     }
     res.send(response);
 });
@@ -453,7 +466,7 @@ router.get("/getLastsRecipe",async(req,res)=>{
     const response = new Object();
     try {
         var recipes = await db.recipe.findAll({
-            limit:5,
+            // limit:5,
             order:[['idRecipe', 'DESC']],
             include:[{
                 model:db.image_recipe,
@@ -475,12 +488,8 @@ router.get("/getLastsRecipe",async(req,res)=>{
 });
 
 router.get("/getRandomRecipe",async(req,res)=>{
-    var idExisting;
-    if (req.body.idExisting) {
-        idExisting = JSON.parse(req.body.idExisting);
-    } else {
-        idExisting = []
-    }
+    
+    var idExisting = JSON.parse(req.query.idExisting);
     
     var moreRandom = await db.recipe.findAll({
         limit:10,
@@ -501,12 +510,13 @@ router.get("/getRandomRecipe",async(req,res)=>{
 router.get("/getRecipe",async(req,res)=>{
     const response = new Object();
     var recipe = await db.recipe.findByPk(
-        req.body.idRecipe,
+        req.query.idRecipe,
         {
+            order:[[db.step_recipe,'stepNumber','ASC']],
             include:[
                 {model:db.step_recipe},
-                {model:db.recipe_ingredient},
-                {model:db.image_recipe}
+                {model:db.recipe_ingredient,include:[{model:db.ingredient}]},
+                {model:db.image_recipe,where:[{principal:1}]}
             ]
         }
     );
@@ -520,6 +530,137 @@ router.get("/getRecipe",async(req,res)=>{
     res.send(response);
 });
 
+router.post('/updateLikedRecipe',async(req,res)=>{
+    const response = new Object();
+    console.log(req.body);
+    
+    if(req.body.actualState){
+        try {
+            var destroyState = await db.liked_recipe.destroy({
+                where:{
+                    idRecipe:req.body.idRecipe,
+                    idUser:req.body.idUser
+                }
+            });
+            if(destroyState){
+                response.status="success";
+                response.message="{'case':'destroy','idRecipe':"+req.body.idRecipe+"}";
+            }
+        } catch (error) {
+            response.status="fail";
+            response.message=error.message;
+        }
+    }else{
+        try {
+            var [liked,created]= await db.liked_recipe.findOrCreate({
+                where:{
+                    idUser:req.body.idUser,
+                    idRecipe:req.body.idRecipe
+                },
+                defaults:{
+                    idUser:req.body.idUser,
+                    idRecipe:req.body.idRecipe
+                }
+            });
+            if(created){
+                response.status="success";
+                response.message="{'case':'created','idRecipe':"+req.body.idRecipe+"}";
+            }else{
+                response.status="success";
+                response.message="{'case':'existed','idRecipe':"+req.body.idRecipe+"}";
+            }
+        } catch (error) {
+            response.status="fail";
+            response.message=error.message;
+        }
+    }
+    console.log(response);
+    
+    res.send(response);
+});
+
+router.get('/getMyfavorites',async(req,res)=>{
+    const response = new Object();
+    try {
+        var getFavorites = await db.liked_recipe.findAll({
+            where:{
+                idUser:req.query.idUser
+            },
+            include:[
+                {model:db.recipe,include:[{model:db.image_recipe,where:{principal:1},required:false}]},
+            ]
+        });
+        response.status="success";
+        response.message=getFavorites;
+    } catch (error) {
+        response.status="fail";
+        response.message=error.message;
+    }
+    res.send(response);
+});
+
+router.get('/searchRecipe',async(req,res)=>{
+    const response = new Object();
+    try {
+        var findRecipe = await db.recipe.findAll({
+            where:{
+                title:{
+                    [Op.like]:'%'+req.query.querySearch+'%'
+                }
+            },
+            include:[{
+                model:db.image_recipe,
+                where:{ principal : 1 }
+            }]
+        });
+        response.status="success";
+        response.message=findRecipe;
+    } catch (error) {
+        response.status="fail";
+        response.message=error.message;
+    }
+    res.send(response);
+});
+
+router.post('/addCommentRecipe',async(req,res)=>{
+    const response = new Object();
+    try {
+        var [coment,created] = await db.recipe_comment.findOrCreate({
+            where:{
+                idUser:req.body.idUser,
+                idRecipe:req.body.idRecipe
+            },
+            defaults:{
+                idUser:req.body.idUser,
+                idRecipe:req.body.idRecipe,
+                assessment:req.body.assessment,
+                commentary:req.body.commentary
+            }
+        });
+        if (created) {
+            response.status = "success";
+            response.message = "Comentario añadido"
+        } else {
+            response.status = "fail";
+            response.message = "Solo puedes dar una valoracion por receta";
+        }
+    } catch (error) {
+        response.status = "fail";
+        response.message = error.message;
+    }
+    console.log(response);
+    res.send(response);
+    
+});
+
+router.get('/getCommentRecipe',async(req,res)=>{
+    var comentaries = await db.recipe_comment.findAll({
+        include:[{
+            model:db.user
+        }]
+    });
+    res.send(comentaries)
+});
 module.exports = router;
 //////new recipes
 ////most voted
