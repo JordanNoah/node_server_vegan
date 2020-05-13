@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const Sequelize = require('sequelize');
-const { DataTypes,Op } = require('sequelize');
+const { DataTypes, Op } = require('sequelize');
 const basename = path.basename(__filename);
 const env = process.env.NODE_ENV || 'development';
 const config = require(__dirname + '/../config/config.json')[env];
@@ -36,34 +36,43 @@ Object.keys(db).forEach(modelName => {
 
 //ASSOCIATIONS
 
-db.user_chat.hasOne(db.chat,{
+db.user_chat.hasOne(db.chat, {
   foreignKey: 'idChat',
   sourceKey: 'idChat',
-  constraints:false
+  constraints: false
 });
 db.user_chat.hasOne(db.user, {
   foreignKey: 'idUser',
   sourceKey: 'idUser',
-  constraints:false
+  constraints: false
 });
 
 
-db.recipe.hasMany(db.step_recipe,{
-  foreignKey:'idRecipe'
+db.recipe.hasMany(db.step_recipe, {
+  foreignKey: 'idRecipe'
 });
 
-db.recipe.hasMany(db.recipe_ingredient,{
-  foreignKey:'idRecipe'
+db.recipe.hasMany(db.recipe_ingredient, {
+  foreignKey: 'idRecipe'
 });
 
-db.recipe.hasMany(db.image_recipe,{
-  foreignKey:'idRecipe'
+db.recipe.hasMany(db.image_recipe, {
+  foreignKey: 'idRecipe'
 });
 
-db.recipe_ingredient.hasOne(db.ingredient,{
-  foreignKey:'idIngredient',
-  sourceKey:'idIngredient',
-  constraints:false
+db.user.hasMany(db.image_user, {
+  foreignKey: 'idUser'
+});
+
+db.like.hasOne(db.user, {
+  foreignKey: 'idUser',
+  sourceKey: 'idUserLiked'
+});
+
+db.recipe_ingredient.hasOne(db.ingredient, {
+  foreignKey: 'idIngredient',
+  sourceKey: 'idIngredient',
+  constraints: false
 });
 
 db.user.hasMany(db.liked_recipe,{
