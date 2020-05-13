@@ -599,32 +599,6 @@ const uploadIngredient = multer({ storage: storage, fileFilter: ingredientFilter
 router.post('/saveIngredient', async (req, res) => {
     const response = new Object();
     var dirImg;
-<<<<<<< HEAD
-        await uploadIngredient(req,res,async(err)=>{
-            if(typeof req.file !== "undefined"){
-                response.message="immage send";
-                dirImg = req.file.path;
-            }else{
-                response.status = 'fail';
-                response.message=err;
-                dirImg = "api/resource/images/ingredient/default.jpg";
-            }            
-            const [ingredient,created] = await db.ingredient.findOrCreate({
-                where:{name:req.body.name},
-                defaults:{
-                    name:req.body.name,
-                    routeImage:dirImg
-                }
-            });
-
-            if(created){
-                response.status = 'success';
-                response.message="ingredient created";
-                response.ingredient = ingredient;
-            }else{
-                response.status="fail";
-                response.message="existing ingredient";
-=======
     await uploadIngredient(req, res, async (err) => {
         if (typeof req.file !== "undefined") {
             response.message = "immage send";
@@ -639,10 +613,8 @@ router.post('/saveIngredient', async (req, res) => {
             defaults: {
                 name: req.body.name,
                 routeImage: dirImg
->>>>>>> e5af524fd53bc7d82b3e862db7fa4b7d84cc2068
             }
         });
-
         if (created) {
             response.status = 'success';
             response.message = "ingredient created";
@@ -694,7 +666,7 @@ router.post("/generateRecipe", async (req, res) => {
                     const dataStep = JSON.parse(req.body.stepRecipe);
                     const dataIngredients = JSON.parse(req.body.recipeIngredient);
                     const recipe = await db.recipe.create({
-<<<<<<< HEAD
+
                         title : req.body.title,
                         description:req.body.description,
                         likes:req.body.likes,
@@ -705,16 +677,6 @@ router.post("/generateRecipe", async (req, res) => {
                         image_recipes:dirImg,
                     },{
                         include:[db.step_recipe,db.recipe_ingredient,db.image_recipe]
-=======
-                        title: req.body.title,
-                        description: req.body.description,
-                        likes: req.body.likes,
-                        step_recipes: dataStep,
-                        recipe_ingredients: dataIngredients,
-                        image_recipes: dirImg
-                    }, {
-                        include: [db.step_recipe, db.recipe_ingredient, db.image_recipe]
->>>>>>> e5af524fd53bc7d82b3e862db7fa4b7d84cc2068
                     });
                     if (recipe) {
                         response.status = "success";
@@ -733,7 +695,6 @@ router.post("/generateRecipe", async (req, res) => {
     });
 });
 
-<<<<<<< HEAD
 router.get("/getIdsLikedRecipe",async(req,res)=>{
     const response = new Object();
     try {
@@ -745,25 +706,6 @@ router.get("/getIdsLikedRecipe",async(req,res)=>{
         });
         response.status="success";
         response.message=getFavorites;
-=======
-router.get("/getLikedRecipe", async (req, res) => {
-    const response = new Object();
-    try {
-        var recipes = await db.recipe.findAll({
-            limit: 10,
-            order: [['likes', 'DESC']],
-            include: [{
-                model: db.image_recipe,
-                where: { principal: 1 }
-            }]
-        });
-        if (recipes) {
-            response.status = "success";
-            response.message = recipes;
-        } else {
-
-        }
->>>>>>> e5af524fd53bc7d82b3e862db7fa4b7d84cc2068
     } catch (error) {
         response.status="fail";
         response.message=error.message;
@@ -792,19 +734,11 @@ router.get("/getLastsRecipe", async (req, res) => {
     const response = new Object();
     try {
         var recipes = await db.recipe.findAll({
-<<<<<<< HEAD
             // limit:5,
             order:[['idRecipe', 'DESC']],
             include:[{
                 model:db.image_recipe,
                 where: { principal : 1}
-=======
-            limit: 5,
-            order: [['idRecipe', 'DESC']],
-            include: [{
-                model: db.image_recipe,
-                where: { principal: 1 }
->>>>>>> e5af524fd53bc7d82b3e862db7fa4b7d84cc2068
             }]
         });
         if (recipes) {
@@ -821,12 +755,6 @@ router.get("/getLastsRecipe", async (req, res) => {
     res.send(response);
 });
 
-<<<<<<< HEAD
-router.get("/getRandomRecipe",async(req,res)=>{
-    
-    var idExisting = JSON.parse(req.query.idExisting);
-    
-=======
 router.get("/getRandomRecipe", async (req, res) => {
     var idExisting;
     if (req.body.idExisting) {
@@ -835,7 +763,6 @@ router.get("/getRandomRecipe", async (req, res) => {
         idExisting = []
     }
 
->>>>>>> e5af524fd53bc7d82b3e862db7fa4b7d84cc2068
     var moreRandom = await db.recipe.findAll({
         limit: 10,
         order: Sequelize.literal('rand()'),
@@ -857,18 +784,11 @@ router.get("/getRecipe", async (req, res) => {
     var recipe = await db.recipe.findByPk(
         req.query.idRecipe,
         {
-<<<<<<< HEAD
             order:[[db.step_recipe,'stepNumber','ASC']],
             include:[
                 {model:db.step_recipe},
                 {model:db.recipe_ingredient,include:[{model:db.ingredient}]},
                 {model:db.image_recipe,where:[{principal:1}]}
-=======
-            include: [
-                { model: db.step_recipe },
-                { model: db.recipe_ingredient },
-                { model: db.image_recipe }
->>>>>>> e5af524fd53bc7d82b3e862db7fa4b7d84cc2068
             ]
         }
     );
