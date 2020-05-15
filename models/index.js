@@ -35,18 +35,33 @@ Object.keys(db).forEach(modelName => {
 
 
 //ASSOCIATIONS
+// ************* social *************
 
-db.user_chat.hasOne(db.chat, {
+db.chat.hasOne(db.user_chat, {
   foreignKey: 'idChat',
-  sourceKey: 'idChat',
-  constraints: false
-});
-db.user_chat.hasOne(db.user, {
-  foreignKey: 'idUser',
-  sourceKey: 'idUser',
+  // sourceKey: 'idChat',
   constraints: false
 });
 
+db.user.hasOne(db.user_chat, {
+  foreignKey: 'idUser',
+  // sourceKey: 'idUser',
+  // constraints: false
+});
+
+
+db.user.hasMany(db.image_user, {
+  foreignKey: 'idUser',
+  // constraints: false
+});
+
+db.user.hasOne(db.like, {
+  foreignKey: 'idUserLiked',
+  // sourceKey: 'idUser',
+  // constraints: false
+});
+
+// *************** RECIPES ****************
 
 db.recipe.hasMany(db.step_recipe, {
   foreignKey: 'idRecipe'
@@ -60,24 +75,16 @@ db.recipe.hasMany(db.image_recipe, {
   foreignKey: 'idRecipe'
 });
 
-db.user.hasMany(db.image_user, {
-  foreignKey: 'idUser'
-});
-
-db.like.hasOne(db.user, {
-  foreignKey: 'idUser',
-  sourceKey: 'idUserLiked'
-});
-
-db.recipe_ingredient.hasOne(db.ingredient, {
+db.ingredient.hasOne(db.recipe_ingredient, {
   foreignKey: 'idIngredient',
-  sourceKey: 'idIngredient',
-  constraints: false
+  // sourceKey: 'idIngredient',
+  // constraints: false
 });
 
 db.user.hasMany(db.liked_recipe,{
   foreignKey:'idUser'
 });
+
 db.recipe.hasMany(db.liked_recipe,{
   foreignKey:'idRecipe'
 });
@@ -86,21 +93,18 @@ db.liked_recipe.belongsTo(db.recipe,{
   foreignKey:"idRecipe"
 });
 
-db.recipe_comment.hasOne(db.user,{
+db.user.hasOne(db.recipe_comment,{
   foreignKey: 'idUser',
-  sourceKey: 'idUser',
-  constraints:false
+  // sourceKey: 'idUser',
+  // constraints:false
 });
 
-db.recipe_comment.hasOne(db.recipe,{
+db.recipe.hasOne(db.recipe_comment,{
   foreignKey: 'idRecipe',
-  sourceKey: 'idRecipe',
-  constraints:false
+  // sourceKey: 'idRecipe',
+  // constraints:false
 });
 
-// db.ingredient.hasOne(db.recipe_ingredient,{
-//   foreignKey:"idIngredient"
-// });
 
 
 db.sequelize = sequelize;

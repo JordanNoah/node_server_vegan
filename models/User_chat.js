@@ -4,20 +4,20 @@ module.exports = (db, DataTypes) => {
         // idUser: { type: DataTypes.INTEGER, allowNull: false },
         // idChat: { type: DataTypes.INTEGER, allowNull: false }
 
-        idUser:{
-            type: DataTypes.INTEGER,
-            references:{
-                model:'users',
-                key:'idUser'
-            },
-        },
-        idChat:{
-            type:DataTypes.INTEGER,
-            references:{
-                model:'chats',
-                key:'idChat'
-            },
-        }
+        // idUser:{
+        //     type: DataTypes.INTEGER,
+        //     references:{
+        //         model:'users',
+        //         key:'idUser'
+        //     },
+        // },
+        // idChat:{
+        //     type:DataTypes.INTEGER,
+        //     references:{
+        //         model:'chats',
+        //         key:'idChat'
+        //     },
+        // }
     });
     return user_chat;
 };

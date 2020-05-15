@@ -18,7 +18,9 @@ app.use('/api', apiRoutes);
 // app.use('/api', express.static(__dirname + '/api'));
 app.use('/uimages', express.static(__dirname + '/api/resource/images/users'));
 
-db.sequelize.sync().then(() => {
+db.sequelize.sync({
+  // force: true
+}).then(() => {
   app.listen(PORT, () => {
     console.log(`Escuchando el puerto *:${PORT}`);
   });
