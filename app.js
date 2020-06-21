@@ -15,7 +15,7 @@ app.use(bodyParser.json());
 const apiRoutes = require('./routes/api');
 
 app.use('/api', apiRoutes);
-// app.use('/api', express.static(__dirname + '/api'));
+app.use('/api', express.static(__dirname + '/api'));
 app.use('/uimages', express.static(__dirname + '/api/resource/images/users'));
 
 db.sequelize.sync({
@@ -114,7 +114,6 @@ nsp.on('connection', (socket) => {
     console.log(connections);
 
   });
-
 });
 
 

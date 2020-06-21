@@ -1,8 +1,11 @@
 module.exports = (db,DataTypes) => {
-    const step_recipe = db.define('step_recipe',{
+    const recipe_step = db.define('recipe_step',{
         idStep: { type: DataTypes.INTEGER, primaryKey:true, allowNull:false, autoIncrement:true },
         description : { type:DataTypes.TEXT('medium'),allowNull:false },
         stepNumber: {type: DataTypes.INTEGER,allowNull:false}
+    },{
+        charset:'utf8',
+        collate:'utf8_general_ci'
     });
-    return step_recipe;
+    return recipe_step;
 }

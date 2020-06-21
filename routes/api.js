@@ -11,7 +11,9 @@ const multer = require("multer");
 const { Sequelize, Op } = require('sequelize');
 const jwtAuth = require('../auth/verifyJwtToken');
 const path = require('path');
-const axios = require('axios')
+const axios = require('axios');
+const sequelize = require("sequelize");
+const { raw } = require("body-parser");
 
 // const mkdirSync = util.promisify(fs.mkdirSync);
 
@@ -31,6 +33,9 @@ const storage = multer.diskStorage({
         }
         if (req.body.type == "recipe") {
             directory = "./api/resource/images/recipe/" + req.body.title.replace(/\s/g, '');
+        }
+        if (req.body.type == "categories") {
+            directory = "./api/resource/images/categories/"
         }
         if (fs.existsSync(directory)) {
             console.log("Directory exists.");
@@ -53,7 +58,6 @@ const fileFilter = async (req, file, cb) => {
     try {
         finder = await app.model(typeSelct).findByPk(body.idOfType);
         console.log(file.mimetype);
-
         if (finder) {
             if (file.mimetype == "image/jpeg" || file.mimetype == "image/jpg" || file.mimetype == "image/png" || file.mimetype == "image/gif") {
                 cb(null, true);
@@ -602,11 +606,11 @@ router.post('/saveIngredient', async (req, res) => {
     await uploadIngredient(req, res, async (err) => {
         if (typeof req.file !== "undefined") {
             response.message = "immage send";
-            dirImg = "./api/resource/images/ingredient/" + req.file.path;
+            dirImg = req.file.path;
         } else {
             response.status = 'fail';
             response.message = err;
-            dirImg = "./api/resource/images/ingredient/default.jpg";
+            dirImg = "api/resource/images/ingredient/default.jpg";
         }
         const [ingredient, created] = await db.ingredient.findOrCreate({
             where: { name: req.body.name },
@@ -629,15 +633,58 @@ router.post('/saveIngredient', async (req, res) => {
 
 
 const recipeFilter = async (req, file, cb) => {
-    if (file.mimetype == "image/jpeg" || file.mimetype == "image/jpg" || file.mimetype == "image/png" || file.mimetype == "image/gif") {
-        cb(null, true);
+    const dataIngredients = JSON.parse(req.body.recipeIngredient);
+    
+    if (req.body.title.length!=0 && req.body.description.length!=0 && req.body.stepRecipe.length!=0 && dataIngredients.length!=0 && req.body.approximateTime.length!=0 && req.body.difficulty.length!=0 && req.body.isVegan.length!=0 && req.body.idCategorie.length!=0) {
+        var existCategorie = await db.categorie.findByPk(req.body.idCategorie);
+        var existRecipe = await db.recipe.findOne({ where: { title: req.body.title } });
+        if(existRecipe==null){
+            if(existCategorie==null){
+                req.fileValidationError = "Categoria inexistente";
+                return cb('Categoria inexistente');
+            }else{
+                var existIngredient = true;
+                var missingIngredients = [];
+    
+                for (const key in dataIngredients) {
+                    if (dataIngredients.hasOwnProperty(key)) {
+                        const element = dataIngredients[key];
+                        var ingredient = await db.ingredient.findByPk(element.idIngredient);
+                        if (ingredient==null) {
+                            existIngredient = false;
+                            missingIngredients.push(element.idIngredient);
+                        }
+                    }
+                }
+                
+                if(!existIngredient){
+                    req.fileValidationError = 'Faltan ingredientes para crear esta receta' + missingIngredients;
+                    return cb('Faltan ingredientes para crear esta receta ' + JSON.stringify(missingIngredients));
+                }else{
+                    if(existCategorie!=null){
+                        if (file.mimetype == "image/jpeg" || file.mimetype == "image/jpg" || file.mimetype == "image/png" || file.mimetype == "image/gif") {
+                            cb(null, true);
+                        } else {
+                            req.fileValidationError = 'Suba solo imagenes/gifs';
+                            return cb('Suba solo imagenes/gifs');
+                        }
+                    }else{
+                        req.fileValidationError = 'No existe esta categoria, creela o busque otra';
+                        return cb('No existe esta categoria, creela o busque otra');
+                    }
+                }
+            }
+        }else{
+            req.fileValidationError = "Ya existe esta receta";
+            return cb('Ya existe esta receta');
+        }
     } else {
-        req.fileValidationError = 'Suba solo imagenes/gifs';
-        return cb('Suba solo imagenes/gifs');
+        req.fileValidationError = 'Llene todos los campos';
+        return cb('Llene todos los campos');
     }
 }
 
-const uploadRecipie = multer({ storage: storage, fileFilter: recipeFilter }).array('images', 6);
+const uploadRecipie = multer({ storage: storage, fileFilter: recipeFilter }).any();
 
 router.post("/generateRecipe", async (req, res) => {
     const response = new Object();
@@ -650,10 +697,12 @@ router.post("/generateRecipe", async (req, res) => {
             if (req.files.length != 0) {
                 dirImg = req.files.map(file => {
                     var obj = {};
-                    obj["principal"] = 1;
+                    obj["principal"] = file.fieldname=="main"?1:0;
                     obj["route"] = file.path;
                     return obj
                 });
+                console.log(dirImg);
+                
             } else {
                 dirImg = [{ "principal": 1, "route": "api/resource/images/recipe/default.jpg" }];
             }
@@ -666,25 +715,22 @@ router.post("/generateRecipe", async (req, res) => {
                     const dataStep = JSON.parse(req.body.stepRecipe);
                     const dataIngredients = JSON.parse(req.body.recipeIngredient);
                     const recipe = await db.recipe.create({
-
                         title : req.body.title,
                         description:req.body.description,
                         likes:req.body.likes,
                         approximateTime:req.body.approximateTime,
                         difficulty:req.body.difficulty,
-                        step_recipes:dataStep,
+                        isVegan:req.body.isVegan,
+                        idCategorie:req.body.idCategorie,
+                        recipe_steps:dataStep,
                         recipe_ingredients:dataIngredients,
-                        image_recipes:dirImg,
+                        recipe_images:dirImg,
                     },{
-                        include:[db.step_recipe,db.recipe_ingredient,db.image_recipe]
+                        include:[db.recipe_step,db.recipe_ingredient,db.recipe_image]
                     });
-                    if (recipe) {
-                        response.status = "success";
-                        response.message = recipe;
-                    } else {
-                        response.status = "fail";
-                        response.message = "error insertando";
-                    }
+                    response.status = "success";
+                    response.message = "Receta agragada";
+                    
                 }
             } catch (error) {
                 response.status = "fail";
@@ -698,7 +744,7 @@ router.post("/generateRecipe", async (req, res) => {
 router.get("/getIdsLikedRecipe",async(req,res)=>{
     const response = new Object();
     try {
-        var getFavorites = await db.liked_recipe.findAll({
+        var getFavorites = await db.recipe_liked.findAll({
             attributes:['idRecipe'],
             where:[{
                 idUser:req.query.idUser
@@ -714,33 +760,68 @@ router.get("/getIdsLikedRecipe",async(req,res)=>{
 });
 
 router.get("/getLikedRecipe",async(req,res)=>{
+    var idExisting;
+    if(req.query.idsRecipes){
+        idExisting=JSON.parse(req.query.idsRecipes);
+    }else{
+        idExisting=[];
+    }
+    
     const response = new Object();
     try {
-        var getFavorites = await db.liked_recipe.findAll({
-            include:[
-                {model:db.recipe,include:[{model:db.image_recipe,where:{principal:1},required:false,limit:1}]},
-            ]
+        var getMostVoted = await db.recipe_comment.findAll({
+            limit:5,
+            attributes:[
+                'idRecipe',
+                [sequelize.literal('SUM(assessment)/COUNT(idRecipeComment)'), 'total_assessment']
+            ],
+            group: ['idRecipe'],
+            order:sequelize.literal('total_assessment DESC'),
+            include:[{
+                model:db.recipe,
+                include:[{
+                    model:db.recipe_image,
+                    where:{
+                        principal:1
+                    }
+                }]
+            }]
         });
         response.status="success";
-        response.message=getFavorites;
+        response.message=getMostVoted;
     } catch (error) {
         response.status="fail";
         response.message=error.message;
     }
     res.send(response);
 });
-
-router.get("/getLastsRecipe", async (req, res) => {
-    const response = new Object();
+// include:[
+//     {model:db.recipe,include:[{model:db.recipe_image,where:{principal:1},required:false,limit:1}]},
+// ],
+// where:{
+//     idRecipe:{
+//         [Op.notIn]:idExisting
+//     }
+// }
+router.get("/getLastsRecipe", async (req, res) => {    
+    const response = new Object();    
     try {
         var recipes = await db.recipe.findAll({
-            // limit:5,
+            // limit:6,
+            attributes:{
+                include:[
+                    [sequelize.literal('(SELECT sum(assessment)/COUNT(idRecipeComment) from `recipe_comments` where recipe_comments.idRecipe = recipe.idRecipe)'),'totalAssessment'],
+                    [sequelize.literal('(SELECT COUNT(idRecipeComment) from `recipe_comments` where recipe_comments.idRecipe = recipe.idRecipe)'),'countOfReview']
+                ]
+            },
             order:[['idRecipe', 'DESC']],
             include:[{
-                model:db.image_recipe,
-                where: { principal : 1}
-            }]
-        });
+                model:db.recipe_image,
+                where:[{
+                    principal:1
+                }]
+            }],
+        });       
         if (recipes) {
             response.status = "success";
             response.message = recipes;
@@ -766,13 +847,19 @@ router.get("/getRandomRecipe", async (req, res) => {
     var moreRandom = await db.recipe.findAll({
         limit: 10,
         order: Sequelize.literal('rand()'),
+        attributes:{
+            include:[
+                [sequelize.literal('(SELECT sum(assessment)/COUNT(idRecipeComment) from `recipe_comments` where recipe_comments.idRecipe = recipe.idRecipe)'),'totalAssessment'],
+                [sequelize.literal('(SELECT COUNT(idRecipeComment) from `recipe_comments` where recipe_comments.idRecipe = recipe.idRecipe)'),'countOfReview']
+            ]
+        },
         where: {
             idRecipe: {
                 [Op.notIn]: idExisting,
             }
         },
         include: [{
-            model: db.image_recipe,
+            model: db.recipe_image,
             where: { principal: 1 }
         }]
     });
@@ -784,17 +871,28 @@ router.get("/getRecipe", async (req, res) => {
     var recipe = await db.recipe.findByPk(
         req.query.idRecipe,
         {
-            order:[[db.step_recipe,'stepNumber','ASC']],
+            order:[[db.recipe_step,'stepNumber','ASC']],
             include:[
-                {model:db.step_recipe},
+                {model:db.recipe_step},
                 {model:db.recipe_ingredient,include:[{model:db.ingredient}]},
-                {model:db.image_recipe,where:[{principal:1}]}
+                {model:db.recipe_image,where:[{principal:1}]},
+                {model:db.recipe_comment,include:[{model:db.user,attributes:["names","idUser"]}]}
             ]
         }
     );
-    if (recipe) {
+    var likedUserRecipe = await db.recipe_liked.findOne({
+        where:[{idUser:req.query.idUser,
+            idRecipe:req.query.idRecipe
+        }]
+    });
+    if (recipe!=null) {
         response.status = "success";
         response.message = recipe;
+        if(likedUserRecipe!=null){
+            response.liked=true;
+        }else{
+            response.liked=false;
+        }
     } else {
         response.status = "fail";
         response.message = "404 recipe not found";
@@ -876,13 +974,13 @@ router.get("/likes", [jwtAuth.verifyToken], async (req, res) => {
 
 });
 
-router.post('/updateLikedRecipe',async(req,res)=>{
+router.post('/updateFavoriteRecipe',async(req,res)=>{
     const response = new Object();
     console.log(req.body);
     
     if(req.body.actualState){
         try {
-            var destroyState = await db.liked_recipe.destroy({
+            var destroyState = await db.recipe_liked.destroy({
                 where:{
                     idRecipe:req.body.idRecipe,
                     idUser:req.body.idUser
@@ -890,7 +988,10 @@ router.post('/updateLikedRecipe',async(req,res)=>{
             });
             if(destroyState){
                 response.status="success";
-                response.message="{'case':'destroy','idRecipe':"+req.body.idRecipe+"}";
+                response.message='{"case":"destroy","idRecipe":'+req.body.idRecipe+'}';
+            }else{
+                response.status="success";
+                response.message='{"case":"destroyed","idRecipe":'+req.body.idRecipe+'}';
             }
         } catch (error) {
             response.status="fail";
@@ -898,7 +999,7 @@ router.post('/updateLikedRecipe',async(req,res)=>{
         }
     }else{
         try {
-            var [liked,created]= await db.liked_recipe.findOrCreate({
+            var [liked,created]= await db.recipe_liked.findOrCreate({
                 where:{
                     idUser:req.body.idUser,
                     idRecipe:req.body.idRecipe
@@ -910,10 +1011,10 @@ router.post('/updateLikedRecipe',async(req,res)=>{
             });
             if(created){
                 response.status="success";
-                response.message="{'case':'created','idRecipe':"+req.body.idRecipe+"}";
+                response.message='{"case":"created","idRecipe":'+req.body.idRecipe+'}';
             }else{
                 response.status="success";
-                response.message="{'case':'existed','idRecipe':"+req.body.idRecipe+"}";
+                response.message='{"case":"existed","idRecipe":'+req.body.idRecipe+'}';
             }
         } catch (error) {
             response.status="fail";
@@ -928,12 +1029,26 @@ router.post('/updateLikedRecipe',async(req,res)=>{
 router.get('/getMyfavorites',async(req,res)=>{
     const response = new Object();
     try {
-        var getFavorites = await db.liked_recipe.findAll({
+        var getFavorites = await db.recipe_liked.findAll({
             where:{
                 idUser:req.query.idUser
             },
             include:[
-                {model:db.recipe,include:[{model:db.image_recipe,where:{principal:1},required:false}]},
+                {
+                    model:db.recipe,
+                    attributes:{
+                        include:[
+                            [sequelize.literal('(SELECT sum(assessment)/COUNT(idRecipeComment) from `recipe_comments` where recipe_comments.idRecipe = recipe.idRecipe)'),'totalAssessment'],
+                            [sequelize.literal('(SELECT COUNT(idRecipeComment) from `recipe_comments` where recipe_comments.idRecipe = recipe.idRecipe)'),'countOfReview']
+                        ]
+                    },
+                    include:[
+                        {
+                            model:db.recipe_image,
+                            where:{principal:1},
+                        }
+                    ]
+                },
             ]
         });
         response.status="success";
@@ -955,7 +1070,7 @@ router.get('/searchRecipe',async(req,res)=>{
                 }
             },
             include:[{
-                model:db.image_recipe,
+                model:db.recipe_image,
                 where:{ principal : 1 }
             }]
         });
@@ -1006,6 +1121,241 @@ router.get('/getCommentRecipe',async(req,res)=>{
         }]
     });
     res.send(comentaries)
+});
+
+
+const categorieFilter = async (req, file, cb) => {
+    // console.log(file);
+    var categorieExist = await db.categorie.findAll({where:{name:req.body.name}});
+    
+    if(categorieExist.length!=0){
+        req.fileValidationError = 'Ya existe esta categoria';
+        return cb('Ya existe esta categoria');
+    }else{
+        if (file.mimetype == "image/jpeg" || file.mimetype == "image/jpg" || file.mimetype == "image/png") {
+            cb(null, true);
+        } else {
+            req.fileValidationError = 'Suba solo imagenes/gifs';
+            return cb('Suba solo imagenes/gifs');
+        }
+    }
+}
+
+const createdCategorie = multer({ storage: storage, fileFilter: categorieFilter }).any();
+
+router.post('/createCategorie',async(req,res)=>{
+    const response = new Object();
+    var dirImg="api/resource/images/categories/";
+    await createdCategorie(req, res, async (err) => {
+        var routeImage;
+        var icon;        
+        if (err) {
+            response.status = "fail";
+            response.message = err;
+        } else {
+            if(req.files.length!=0){
+                req.files.map(file => {
+                    if(file.fieldname=="image"){
+                        routeImage=file.path;
+                    }
+                    if(file.fieldname=="icon"){
+                        icon=file.path;
+                    }
+                });
+            }else{
+                routeImage=dirImg+"defaultImage.jpg";
+                icon=dirImg+"defaultIcon.png";
+            }
+            try {
+                var [categorie,created] = await db.categorie.findOrCreate({
+                    where:{
+                        name:req.body.name
+                    },
+                    defaults:{
+                        name:req.body.name,
+                        routeImage:routeImage==undefined?dirImg+"defaultImage.jpg":routeImage,
+                        icon:icon==undefined?dirImg+"defaultImage.png":icon
+                    }
+                });
+                if (created) {
+                    response.status = "success";
+                    response.message = "Categoria añadida"
+                } else {
+                    response.status = "fail";
+                    response.message = "ya existe esta categoria";
+                }
+            } catch (error) {
+                response.status = "fail";
+                response.message = error.message;
+            }
+        }
+        res.send(response);
+    });
+});
+
+router.get('/getCategories',async(req,res)=>{
+    const response = new Object();
+    
+    try {
+        var categories = await db.categorie.findAll({order:[['name','ASC']]});
+        response.status="success";
+        response.message=categories;
+    } catch (error) {
+        response.status="error";
+        response.message=error.message;
+    }
+    res.send(response);
+});
+
+router.get('/getRecipePerFilter',async(req,res)=>{
+    const response = new Object();
+    var recipes;
+
+    var idExisting;
+    if (req.query.idRecipes) {
+        idExisting = JSON.parse(req.query.idRecipes);
+    } else {
+        idExisting = []
+    }
+    
+    if(req.query.filter=="New recipes"){
+        try {
+            recipes = await db.recipe.findAll({
+                limit:1,
+                order:[['idRecipe', 'DESC']],
+                attributes:{
+                    include:[
+                        [sequelize.literal('(SELECT sum(assessment)/COUNT(idRecipeComment) from `recipe_comments` where recipe_comments.idRecipe = recipe.idRecipe)'),'totalAssessment'],
+                        [sequelize.literal('(SELECT COUNT(idRecipeComment) from `recipe_comments` where recipe_comments.idRecipe = recipe.idRecipe)'),'countOfReview']
+                    ]
+                },
+                where: {
+                    idRecipe: {
+                        [Op.notIn]: idExisting,
+                    }
+                },
+                include:[{
+                    model:db.recipe_image,
+                    where:{ principal: 1 }
+                }]
+            });
+            if (recipes) {
+                response.status = "success";
+                response.message = recipes;
+            } else {
+                response.status = "fail";
+                response.message = "not recipes";
+            }
+        } catch (error) {
+            response.status = "fail";
+            response.message = error.message;
+        }
+    }
+    if(req.query.filter=="Random"){
+        try {
+            recipes = await db.recipe.findAll({
+                limit:15,
+                order: Sequelize.literal('rand()'),
+                attributes:{
+                    include:[
+                        [sequelize.literal('(SELECT sum(assessment)/COUNT(idRecipeComment) from `recipe_comments` where recipe_comments.idRecipe = recipe.idRecipe)'),'totalAssessment'],
+                        [sequelize.literal('(SELECT COUNT(idRecipeComment) from `recipe_comments` where recipe_comments.idRecipe = recipe.idRecipe)'),'countOfReview']
+                    ]
+                },
+                where: {
+                    idRecipe: {
+                        [Op.notIn]: idExisting,
+                    }
+                },
+                include: [{
+                    model: db.recipe_image,
+                    where: { principal: 1 }
+                }]
+            });
+            if (recipes) {
+                response.status = "success";
+                response.message = recipes;
+            } else {
+                response.status = "fail";
+                response.message = "not recipes";
+            }
+        } catch (error) {
+            response.status = "fail";
+            response.message = error.message;
+        }
+    }
+    if (req.query.filter=="Most voted"){
+        try {
+            recipes = await db.recipe.findAll({
+                limit:15,
+                attributes:{
+                    include:[
+                        [sequelize.literal('(SELECT sum(assessment)/COUNT(idRecipeComment) from `recipe_comments` where recipe_comments.idRecipe = recipe.idRecipe)'),'totalAssessment'],
+                        [sequelize.literal('(SELECT COUNT(idRecipeComment) from `recipe_comments` where recipe_comments.idRecipe = recipe.idRecipe)'),'countOfReview']
+                    ]
+                },
+                include: [{
+                    model: db.recipe_image,
+                    where: { principal: 1 }
+                },{
+                    model:db.recipe_comment,
+                    attributes:{
+                        exclude:['idRecipeComment','assessment','commentary','idUser','idRecipe','createdAt','updatedAt']
+                    },
+                    where:{
+                        idRecipe:{
+                            [Op.ne]:null
+                        }
+                    }
+                }],
+                where: {
+                    idRecipe: {
+                        [Op.notIn]: idExisting,
+                    }
+                }
+            });
+            if (recipes) {
+                response.status = "success";
+                response.message = recipes;
+            } else {
+                response.status = "fail";
+                response.message = "not recipes";
+            }
+        } catch (error) {
+            response.status = "fail";
+            response.message = error.message;
+        }
+    }
+    if (req.query.filter!="Random" && req.query.filter!="New recipes" && req.query.filter!="Most voted") {
+        try {
+            recipes = await db.categorie.findAll({
+                limit:1,
+                include:[{
+                    model:db.recipe,
+                    where: {
+                        idRecipe: {
+                            [Op.notIn]: idExisting,
+                        }
+                    },
+                    include:[{
+                        model:db.recipe_image,
+                        where: { principal : 1 }
+                    }]
+                }],
+                where:{ name: req.query.filter }
+            });
+            if(recipes){
+                response.status="success";
+                response.message=recipes;
+            }else{
+
+            }
+        } catch (error) {
+            response.status = "fail";
+            response.message = error.message;
+        }
+    }    
+    res.send(response);
 });
 module.exports = router;
 //////new recipes

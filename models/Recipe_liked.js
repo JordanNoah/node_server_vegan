@@ -1,6 +1,6 @@
 module.exports = (db,DataTypes) =>{
-    const liked_recipe = db.define('liked_recipe',{
+    const recipe_liked = db.define('recipe_liked',{
         idLiked: { type: DataTypes.INTEGER, primaryKey:true,allowNull:false,autoIncrement:true },
     });
-    return liked_recipe;
+    return recipe_liked;
 }

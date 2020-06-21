@@ -63,48 +63,55 @@ db.user.hasOne(db.like, {
 
 // *************** RECIPES ****************
 
-db.recipe.hasMany(db.step_recipe, {
+db.recipe.hasMany(db.recipe_step, {
   foreignKey: 'idRecipe'
+});
+
+db.categorie.hasMany(db.recipe,{
+  foreignKey: 'idCategorie'
 });
 
 db.recipe.hasMany(db.recipe_ingredient, {
   foreignKey: 'idRecipe'
 });
 
-db.recipe.hasMany(db.image_recipe, {
+db.recipe.hasMany(db.recipe_image, {
   foreignKey: 'idRecipe'
 });
 
-db.ingredient.hasOne(db.recipe_ingredient, {
-  foreignKey: 'idIngredient',
-  // sourceKey: 'idIngredient',
-  // constraints: false
+db.recipe_ingredient.hasOne(db.ingredient,{
+  foreignKey:'idIngredient',
+  sourceKey:'idIngredient',
+  constraints:false
 });
 
-db.user.hasMany(db.liked_recipe,{
+db.user.hasMany(db.recipe_liked,{
   foreignKey:'idUser'
 });
 
-db.recipe.hasMany(db.liked_recipe,{
+db.recipe.hasMany(db.recipe_liked,{
   foreignKey:'idRecipe'
 });
 
-db.liked_recipe.belongsTo(db.recipe,{
+db.recipe_liked.belongsTo(db.recipe,{
   foreignKey:"idRecipe"
 });
 
-db.user.hasOne(db.recipe_comment,{
+db.recipe_comment.hasMany(db.user,{
   foreignKey: 'idUser',
-  // sourceKey: 'idUser',
-  // constraints:false
+  sourceKey: 'idUser',
+  constraints:false
 });
 
-db.recipe.hasOne(db.recipe_comment,{
+db.recipe.hasMany(db.recipe_comment,{
   foreignKey: 'idRecipe',
   // sourceKey: 'idRecipe',
   // constraints:false
 });
 
+db.recipe_comment.belongsTo(db.recipe,{
+  foreignKey: 'idRecipe'
+});
 
 
 db.sequelize = sequelize;
