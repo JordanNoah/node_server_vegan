@@ -1069,6 +1069,12 @@ router.get('/searchRecipe',async(req,res)=>{
                     [Op.like]:'%'+req.query.querySearch+'%'
                 }
             },
+            attributes:{
+                include:[
+                    [sequelize.literal('(SELECT sum(assessment)/COUNT(idRecipeComment) from `recipe_comments` where recipe_comments.idRecipe = recipe.idRecipe)'),'totalAssessment'],
+                    [sequelize.literal('(SELECT COUNT(idRecipeComment) from `recipe_comments` where recipe_comments.idRecipe = recipe.idRecipe)'),'countOfReview']
+                ]
+            },
             include:[{
                 model:db.recipe_image,
                 where:{ principal : 1 }
@@ -1080,6 +1086,8 @@ router.get('/searchRecipe',async(req,res)=>{
         response.status="fail";
         response.message=error.message;
     }
+    console.log(response);
+    
     res.send(response);
 });
 
